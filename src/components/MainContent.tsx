@@ -1,3 +1,4 @@
+import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
 import { useState } from 'react'
 import './MainContent.css'
 
@@ -12,14 +13,8 @@ export default function MainContent({ activeSection }: ContentSectionProps) {
         return (
           <div className="content-section">
             <h2>Отрисовка витражей с размерами</h2>
-            <div className="content-card">
-              <p>Здесь будет интерфейс для создания и редактирования витражей с указанием размеров стеклопакетов.</p>
-              <div className="feature-list">
-                <div className="feature-item">📏 Задание размеров витражей</div>
-                <div className="feature-item">🎨 Графический редактор</div>
-                <div className="feature-item">📐 Расчет площадей</div>
-                <div className="feature-item">💾 Сохранение проектов</div>
-              </div>
+            <div className="graphics-container">
+              <GraphicsEditor width={1000} height={700} />
             </div>
           </div>
         )
@@ -107,7 +102,7 @@ export default function MainContent({ activeSection }: ContentSectionProps) {
       default:
         return (
           <div className="content-section">
-            <h2>Добро пожаловать в VitraGlass Control</h2>
+            <h2>Добро пожаловать в VitraGlassControl</h2>
             <div className="content-card">
               <p>Система учета витражей со стеклопакетами</p>
               <p>Выберите раздел в боковом меню для начала работы.</p>
