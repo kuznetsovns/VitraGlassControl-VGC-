@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "Read(//c/Users/popov.a.n/WebstormProjects/**)",
+      "Bash(git clone:*)",
+      "Bash(cat:*)",
+      "Bash(sed:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
