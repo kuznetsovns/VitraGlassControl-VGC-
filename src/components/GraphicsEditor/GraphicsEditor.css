@@ -1,0 +1,249 @@
+.graphics-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fbff 0%, #e8f4fd 100%);
+  border-bottom: 1px solid #e0e0e0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tool-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.editor-toolbar button {
+  padding: 10px 16px;
+  border: 1px solid #d0d0d0;
+  background: white;
+  color: #2c3e50;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-toolbar button:hover {
+  background: #f0f8ff;
+  border-color: #4a90e2;
+  transform: translateY(-1px);
+}
+
+.editor-toolbar button.active {
+  background: #4a90e2;
+  color: white;
+  border-color: #357abd;
+}
+
+.editor-workspace {
+  display: flex;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.drawing-canvas {
+  border: 1px solid #e0e0e0;
+  cursor: crosshair;
+  background: white;
+  flex: 1;
+}
+
+.drawing-canvas:hover {
+  box-shadow: inset 0 0 0 1px #4a90e2;
+}
+
+.properties-panel {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  width: 280px;
+  background: white;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.properties-panel h3 {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  color: white;
+  padding: 16px 20px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.property-group {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.property-group:last-of-type {
+  border-bottom: none;
+}
+
+.property-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+  margin-bottom: 8px;
+}
+
+.property-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+}
+
+.property-group input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.close-properties {
+  width: 100%;
+  padding: 12px;
+  background: #f8f9fa;
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  color: #666;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.close-properties:hover {
+  background: #e9ecef;
+}
+
+.editor-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  font-size: 13px;
+  color: #666;
+}
+
+.stats {
+  font-weight: 500;
+}
+
+.instructions {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .editor-toolbar {
+    padding: 8px 12px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .tool-group {
+    justify-content: center;
+  }
+  
+  .editor-toolbar button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  
+  .properties-panel {
+    width: calc(100% - 32px);
+    right: 16px;
+    left: 16px;
+    top: 16px;
+  }
+  
+  .editor-info {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .editor-toolbar {
+    padding: 8px;
+  }
+  
+  .editor-toolbar button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .properties-panel {
+    width: calc(100% - 16px);
+    right: 8px;
+    left: 8px;
+    top: 8px;
+  }
+  
+  .property-group {
+    padding: 12px 16px;
+  }
+  
+  .drawing-canvas {
+    min-height: 400px;
+  }
+}
+
+/* Animation for property panel */
+.properties-panel {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Hover effects for canvas elements */
+.drawing-canvas {
+  transition: box-shadow 0.2s ease;
+}
+
+/* Glass unit selection highlight */
+.glass-selected {
+  box-shadow: 0 0 0 2px #4a90e2;
+}
+
+/* Profile selection highlight */
+.profile-selected {
+  filter: drop-shadow(0 0 3px #d2691e);
+}
