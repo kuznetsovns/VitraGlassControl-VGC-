@@ -89,6 +89,7 @@
   border-bottom-color: rgba(255, 255, 255, 0.3);
 }
 
+
 /* Responsive design */
 @media (max-width: 768px) {
   .content-section h2 {

@@ -1,5 +1,5 @@
 import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
-import { useState } from 'react'
+import VitrageSpecification from './VitrageSpecification/VitrageSpecification'
 import './MainContent.css'
 
 export interface ContentSectionProps {
@@ -16,6 +16,13 @@ export default function MainContent({ activeSection }: ContentSectionProps) {
             <div className="graphics-container">
               <GraphicsEditor width={1000} height={700} />
             </div>
+          </div>
+        )
+      
+      case 'specification':
+        return (
+          <div className="content-section">
+            <VitrageSpecification />
           </div>
         )
       

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a React + TypeScript + Vite project using the default Vite React template. The project uses modern React patterns with React 19.1.1, TypeScript 5.8.3, and Vite 7.1.2 for fast development and building.
+VitraGlassControl is a specialized React + TypeScript + Vite application for managing glass panels and window configurations ("Учет витражей со стеклопакетами"). This is not a standard template but a custom graphics-heavy application with drawing capabilities for architectural glass design.
 
 ## Development Commands
 
@@ -13,15 +13,22 @@ This is a React + TypeScript + Vite project using the default Vite React templat
 - **Lint code**: `npm run lint` - Run ESLint on all files
 - **Preview production build**: `npm run preview` - Preview the production build locally
 
-## Project Structure
+## Application Architecture
 
-- `src/` - Main source code directory
-  - `App.tsx` - Main React component with counter example
-  - `main.tsx` - React app entry point with StrictMode
-  - `App.css` & `index.css` - Component and global styles
-  - `assets/` - Static assets like SVG files
-- `public/` - Public assets served at root
-- `dist/` - Build output directory (ignored by git and ESLint)
+### Core Structure
+- `src/App.tsx` - Entry point that renders the Layout component
+- `src/components/Layout.tsx` - Main application shell with sidebar navigation and content area
+- `src/components/MainContent.tsx` - Content router that renders different sections based on active menu item
+- `src/components/GraphicsEditor/` - Complex canvas-based graphics editor for drawing glass panels
+
+### Key Features
+1. **Sidebar Navigation**: 6 main sections including vitrage drawing, floor plans, facade plans, support, settings, and administration
+2. **Graphics Editor**: Interactive HTML5 Canvas for drawing and editing glass units with:
+   - Drawing tools (select, glass unit creation, profile creation)
+   - Real-time property editing
+   - Drag-and-drop functionality
+   - Visual feedback with grid and dimensions
+3. **Multi-language Support**: Russian interface for architectural/construction terminology
 
 ## TypeScript Configuration
 
@@ -45,3 +52,33 @@ ESLint is configured with:
 - Browser globals configured
 
 The project enforces strict TypeScript settings including unused variable detection and no fallthrough cases in switch statements.
+
+## Important Data Models
+
+### GlassUnit Interface
+```typescript
+interface GlassUnit {
+  id: string
+  x: number, y: number        // Canvas position
+  width: number, height: number // Dimensions in mm
+  formula?: string             // Glass formula (e.g., "4М1-16-4М1")
+  label?: string              // Display label (e.g., "G1", "G2")
+}
+```
+
+### Profile Interface
+```typescript
+interface Profile {
+  id: string
+  x1: number, y1: number, x2: number, y2: number // Line coordinates
+  width: number               // Profile thickness
+  type: 'horizontal' | 'vertical'
+}
+```
+
+## Working with the Graphics Editor
+- Located in `src/components/GraphicsEditor/GraphicsEditor.tsx`
+- Uses HTML5 Canvas with React refs for drawing operations
+- Implements custom mouse event handling for drawing interactions
+- Canvas coordinates system with 20px grid spacing
+- All dimensions displayed in millimeters (мм)

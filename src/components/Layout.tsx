@@ -10,6 +10,7 @@ export interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { id: 'vitrage-drawing', label: 'Отрисовка витражей с размерами', icon: '📐' },
+  { id: 'specification', label: 'Спецификация витражей', icon: '📋' },
   { id: 'floor-plans', label: 'План этажей', icon: '🏢' },
   { id: 'facade-plans', label: 'Планы фасадов', icon: '🏗️' },
   { id: 'support', label: 'Поддержка', icon: '❓' },
