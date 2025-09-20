@@ -25,6 +25,11 @@ export default function Layout() {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-header">
+          <div className="logo-container">
+            <div className="logo">
+              <span className="logo-text">VGC</span>
+            </div>
+          </div>
           <h1 className="sidebar-title">VitraGlassControl</h1>
           <div className="sidebar-subtitle">Учет витражей со стеклопакетами</div>
         </div>

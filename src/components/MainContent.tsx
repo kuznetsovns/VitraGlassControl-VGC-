@@ -1,5 +1,6 @@
 import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
 import VitrageSpecification from './VitrageSpecification/VitrageSpecification'
+import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
 import './MainContent.css'
 
 export interface ContentSectionProps {
@@ -30,14 +31,8 @@ export default function MainContent({ activeSection }: ContentSectionProps) {
         return (
           <div className="content-section">
             <h2>План этажей</h2>
-            <div className="content-card">
-              <p>Управление планами этажей зданий для размещения витражных конструкций.</p>
-              <div className="feature-list">
-                <div className="feature-item">🏢 Создание планов этажей</div>
-                <div className="feature-item">📍 Размещение витражей</div>
-                <div className="feature-item">📊 Просмотр статистики</div>
-                <div className="feature-item">🔄 Импорт/экспорт планов</div>
-              </div>
+            <div className="graphics-container">
+              <FloorPlanEditor width={1000} height={700} />
             </div>
           </div>
         )

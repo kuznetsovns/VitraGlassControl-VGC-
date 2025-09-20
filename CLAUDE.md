@@ -55,30 +55,51 @@ The project enforces strict TypeScript settings including unused variable detect
 
 ## Important Data Models
 
-### GlassUnit Interface
+### VitrageSegment Interface
 ```typescript
-interface GlassUnit {
+interface VitrageSegment {
   id: string
-  x: number, y: number        // Canvas position
-  width: number, height: number // Dimensions in mm
-  formula?: string             // Glass formula (e.g., "4М1-16-4М1")
-  label?: string              // Display label (e.g., "G1", "G2")
+  row: number, col: number    // Grid position
+  x: number, y: number        // Canvas position  
+  width: number, height: number // Canvas dimensions
+  type: 'glass' | 'ventilation' | 'empty' | 'sandwich' | 'casement' | 'door'
+  formula?: string            // Element formula (e.g., "4М1-16-4М1")
+  label?: string              // Display label (e.g., "G1", "V1")
+  realWidth?: number          // Actual dimensions in mm
+  realHeight?: number
+  merged?: boolean            // For merged segments
+  rowSpan?: number, colSpan?: number // Spanning properties
+  isStemalit?: boolean        // For glass segments
 }
 ```
 
-### Profile Interface
+### VitrageGrid Interface
 ```typescript
-interface Profile {
+interface VitrageGrid {
   id: string
-  x1: number, y1: number, x2: number, y2: number // Line coordinates
-  width: number               // Profile thickness
-  type: 'horizontal' | 'vertical'
+  name: string                // Vitrage identifier (e.g., "В-01")
+  rows: number, cols: number  // Grid dimensions
+  segments: VitrageSegment[]  // All segments in grid
+  totalWidth: number, totalHeight: number // Total canvas size
+  profileWidth: number        // Frame thickness
+  createdAt: Date
 }
 ```
 
 ## Working with the Graphics Editor
 - Located in `src/components/GraphicsEditor/GraphicsEditor.tsx`
 - Uses HTML5 Canvas with React refs for drawing operations
-- Implements custom mouse event handling for drawing interactions
-- Canvas coordinates system with 20px grid spacing
-- All dimensions displayed in millimeters (мм)
+- Grid-based vitrage creation system with configurable rows/columns
+- Interactive segment editing with property panels
+- Supports segment merging for complex glass configurations
+- Real-time dimension editing by clicking on dimension labels
+- Canvas coordinates with proportional sizing based on real millimeter dimensions
+- Profile system with intelligent intersection handling
+- Local storage persistence for saved vitrages
+
+### Key Features
+- **Segment Types**: glass, ventilation, empty, sandwich, casement, door
+- **Merge Functionality**: Combine adjacent segments with span calculations
+- **Dimension System**: Real millimeters converted to proportional canvas coordinates
+- **Interactive Editing**: Click dimensions to edit, click segments for properties
+- **Profile Rendering**: Automatic frame and intersection drawing
