@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "Read(//c/Users/zinin.v.a/WebstormProjects/**)",
+      "WebFetch(domain:github.com)",
+      "Bash(git clone:*)",
+      "Bash(cat:*)",
+      "Bash(npm install)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
