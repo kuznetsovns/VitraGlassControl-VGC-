@@ -1,21 +1,26 @@
 import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
 import VitrageSpecification from './VitrageSpecification/VitrageSpecification'
 import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
+import MainPage from './MainPage'
 import './MainContent.css'
 
 export interface ContentSectionProps {
   activeSection: string
+  onSectionChange?: (section: string) => void
 }
 
-export default function MainContent({ activeSection }: ContentSectionProps) {
+export default function MainContent({ activeSection, onSectionChange }: ContentSectionProps) {
   const renderContent = () => {
     switch (activeSection) {
+      case 'main':
+        return <MainPage />
+        
       case 'vitrage-drawing':
         return (
           <div className="content-section">
             <h2>Отрисовка витражей с размерами</h2>
-            <div className="graphics-container">
-              <GraphicsEditor width={1000} height={700} />
+            <div className="graphics-container responsive-graphics">
+              <GraphicsEditor />
             </div>
           </div>
         )
@@ -29,10 +34,21 @@ export default function MainContent({ activeSection }: ContentSectionProps) {
       
       case 'floor-plans':
         return (
-          <div className="content-section">
-            <h2>План этажей</h2>
-            <div className="graphics-container">
-              <FloorPlanEditor width={1000} height={700} />
+          <div className="content-section fullscreen-section">
+            <div className="compact-header">
+              <div className="header-content">
+                <button 
+                  className="exit-fullscreen-btn"
+                  onClick={() => onSectionChange?.('vitrage-drawing')}
+                  title="Выйти из полноэкранного режима"
+                >
+                  ✕
+                </button>
+                <h2>План этажей</h2>
+              </div>
+            </div>
+            <div className="fullscreen-container">
+              <FloorPlanEditor />
             </div>
           </div>
         )

@@ -42,8 +42,10 @@ interface GraphicsEditorProps {
   height?: number
 }
 
-export default function GraphicsEditor({ width = 800, height = 600 }: GraphicsEditorProps) {
+export default function GraphicsEditor({ width, height }: GraphicsEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: width || 800, height: height || 600 })
   
   // Grid configuration state
   const [showGridConfig, setShowGridConfig] = useState(true)
@@ -82,8 +84,8 @@ export default function GraphicsEditor({ width = 800, height = 600 }: GraphicsEd
     
     for (let row = 0; row < gridRows; row++) {
       for (let col = 0; col < gridCols; col++) {
-        const x = (width - totalWidth) / 2 + profileWidth + col * (segmentWidth + profileWidth)
-        const y = (height - totalHeight) / 2 + profileWidth + row * (segmentHeight + profileWidth)
+        const x = (canvasDimensions.width - totalWidth) / 2 + profileWidth + col * (segmentWidth + profileWidth)
+        const y = (canvasDimensions.height - totalHeight) / 2 + profileWidth + row * (segmentHeight + profileWidth)
         
         segments.push({
           id: `segment-${row}-${col}`,
@@ -130,8 +132,8 @@ export default function GraphicsEditor({ width = 800, height = 600 }: GraphicsEd
     if (activeSegments.length === 0) return
 
     // Calculate scaling factor to fit within window bounds
-    const maxTotalWidth = Math.min(width * 0.9, 800)
-    const maxTotalHeight = Math.min(height * 0.7, 600)
+    const maxTotalWidth = Math.min(canvasDimensions.width * 0.9, 800)
+    const maxTotalHeight = Math.min(canvasDimensions.height * 0.7, 600)
     
     // Calculate column widths and row heights based on segment real dimensions
     const colWidths: number[] = new Array(vitrageGrid.cols).fill(100) // Default 100mm
@@ -171,8 +173,8 @@ export default function GraphicsEditor({ width = 800, height = 600 }: GraphicsEd
     const gridWidth = totalRealWidth * scale + (vitrageGrid.cols + 1) * vitrageGrid.profileWidth
     const gridHeight = totalRealHeight * scale + (vitrageGrid.rows + 1) * vitrageGrid.profileWidth
     
-    const startX = (width - gridWidth) / 2
-    const startY = (height - gridHeight) / 2
+    const startX = (canvasDimensions.width - gridWidth) / 2
+    const startY = (canvasDimensions.height - gridHeight) / 2
 
     // Calculate cumulative positions
     const colPositions = [startX + vitrageGrid.profileWidth]
@@ -265,12 +267,12 @@ export default function GraphicsEditor({ width = 800, height = 600 }: GraphicsEd
     if (!ctx) return
 
     // Clear canvas
-    ctx.clearRect(0, 0, width, height)
+    ctx.clearRect(0, 0, canvasDimensions.width, canvasDimensions.height)
 
     if (!vitrageGrid) return
 
-    const startX = (width - vitrageGrid.totalWidth) / 2
-    const startY = (height - vitrageGrid.totalHeight) / 2
+    const startX = (canvasDimensions.width - vitrageGrid.totalWidth) / 2
+    const startY = (canvasDimensions.height - vitrageGrid.totalHeight) / 2
 
     // Draw outer frame
     ctx.fillStyle = '#808080' // Grey color for profiles
@@ -579,11 +581,38 @@ export default function GraphicsEditor({ width = 800, height = 600 }: GraphicsEd
         }
       }
     })
-  }, [width, height, vitrageGrid, mergeMode, selectedForMerge, isProfileNeeded])
+  }, [canvasDimensions.width, canvasDimensions.height, vitrageGrid, mergeMode, selectedForMerge, isProfileNeeded])
 
   useEffect(() => {
     drawCanvas()
   }, [drawCanvas])
+
+  // Auto-resize canvas to fit container
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      if (containerRef.current && !width && !height) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setCanvasDimensions({
+          width: Math.floor(rect.width - 40), // Account for padding
+          height: Math.floor(rect.height - 40)
+        })
+      }
+    }
+
+    // Use setTimeout to ensure DOM has updated after sidebar changes
+    const timeoutId = setTimeout(updateCanvasSize, 100)
+    
+    const handleResize = () => {
+      setTimeout(updateCanvasSize, 100)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    
+    return () => {
+      clearTimeout(timeoutId)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [width, height])
 
   // Инициализация имени витража при загрузке
   useEffect(() => {
@@ -1074,11 +1103,11 @@ export default function GraphicsEditor({ width = 800, height = 600 }: GraphicsEd
             </div>
           </div>
 
-          <div className="editor-workspace">
+          <div ref={containerRef} className="editor-workspace">
             <canvas
               ref={canvasRef}
-              width={width}
-              height={height}
+              width={canvasDimensions.width}
+              height={canvasDimensions.height}
               onMouseDown={handleMouseDown}
               className="drawing-canvas"
             />

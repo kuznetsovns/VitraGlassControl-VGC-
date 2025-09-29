@@ -22,11 +22,55 @@
   overflow-y: auto;
   position: relative;
   z-index: 10;
-  transition: all var(--transition-base);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 
     0 8px 32px rgba(135, 206, 235, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
+
+/* Collapsed sidebar styles */
+.sidebar.collapsed {
+  width: 70px;
+}
+
+.layout.sidebar-collapsed .main-content {
+  margin-left: 0;
+}
+
+/* Toggle button styles */
+.sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  right: -15px;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(173, 216, 230, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.sidebar-toggle:hover {
+  background: rgba(173, 216, 230, 0.2);
+  border-color: rgba(173, 216, 230, 0.8);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.toggle-icon {
+  font-size: 12px;
+  color: var(--text-dark);
+  font-weight: bold;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 
 .sidebar::before {
   content: '';
@@ -47,6 +91,11 @@
   text-align: center;
   position: relative;
   z-index: 1;
+  transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 20px 10px;
 }
 
 /* Logo Styles */
@@ -71,11 +120,39 @@
     0 10px 30px rgba(135, 206, 235, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
   position: relative;
-  transition: all var(--transition-base);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   border: 1px solid rgba(173, 216, 230, 0.4);
+}
+
+.sidebar.collapsed .logo {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+}
+
+.logo-text {
+  transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed .logo-text {
+  font-size: 20px;
+}
+
+/* Smooth text appearance/disappearance */
+.sidebar.collapsed .sidebar-title,
+.sidebar.collapsed .sidebar-subtitle {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.sidebar.collapsed .menu-label {
+  opacity: 0;
+  transform: translateX(-10px);
 }
 
 .logo::before {
@@ -122,6 +199,8 @@
   margin: 0 0 8px 0;
   letter-spacing: -0.5px;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-subtitle {
@@ -130,6 +209,8 @@
   font-weight: 400;
   letter-spacing: 0.5px;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Navigation Styles */
@@ -153,9 +234,17 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.2s ease,
+              transform 0.2s ease;
   position: relative;
   overflow: hidden;
+}
+
+.sidebar.collapsed .menu-item {
+  padding: 14px;
+  justify-content: center;
+  border-radius: 10px;
 }
 
 .menu-item::before {
@@ -222,11 +311,18 @@
   justify-content: center;
   width: 24px;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed .menu-icon {
+  margin-right: 0;
 }
 
 .menu-label {
   flex: 1;
   text-align: left;
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Main Content Area */
@@ -236,6 +332,7 @@
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .content-area {

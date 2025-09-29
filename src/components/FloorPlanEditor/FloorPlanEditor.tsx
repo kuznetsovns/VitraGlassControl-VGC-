@@ -7,7 +7,7 @@ interface VitrageGrid {
   name: string
   rows: number
   cols: number
-  segments: any[] // Simplified for floor plan usage
+  segments: unknown[] // Simplified for floor plan usage
   totalWidth: number
   totalHeight: number
   profileWidth: number
@@ -44,7 +44,8 @@ export interface PlacedVitrage {
 export interface FloorPlan {
   id: string
   name: string
-  buildingName: string
+  corpus: string
+  section: string
   floor: number
   walls: Wall[]
   rooms: Room[]
@@ -54,6 +55,8 @@ export interface FloorPlan {
   backgroundOpacity?: number
   createdAt: Date
   updatedAt: Date
+  // Legacy field for backward compatibility
+  buildingName?: string
 }
 
 interface FloorPlanEditorProps {
@@ -61,32 +64,50 @@ interface FloorPlanEditorProps {
   height?: number
 }
 
-type Tool = 'select' | 'wall' | 'room' | 'vitrage' | 'move' | 'delete'
-
-export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPlanEditorProps) {
+export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: width || 1200, height: height || 800 })
   
   // Editor state
-  const [currentTool, setCurrentTool] = useState<Tool>('select')
   const [currentPlan, setCurrentPlan] = useState<FloorPlan | null>(null)
   const [savedPlans, setSavedPlans] = useState<FloorPlan[]>([])
   const [savedVitrages, setSavedVitrages] = useState<VitrageGrid[]>([])
   
   // Drawing state
-  const [isDrawing, setIsDrawing] = useState(false)
-  const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null)
   const [selectedItem, setSelectedItem] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState<{x: number, y: number} | null>(null)
   
   // UI state
   const [showNewPlanDialog, setShowNewPlanDialog] = useState(false)
   const [showVitrageSelector, setShowVitrageSelector] = useState(false)
+  const [showPlanSelector, setShowPlanSelector] = useState(false)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.3)
-  const [backgroundFitMode, setBackgroundFitMode] = useState<'contain' | 'cover'>('contain')
+  const [selectedVitrageForPlacement, setSelectedVitrageForPlacement] = useState<VitrageGrid | null>(null)
+  const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null)
+  
+  // Zoom and pan state
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [panOffset, setPanOffset] = useState({x: 0, y: 0})
+  const [isPanning, setIsPanning] = useState(false)
+  const [panStart, setPanStart] = useState<{x: number, y: number} | null>(null)
+  
+  // Background image cache
+  const [backgroundImageCache, setBackgroundImageCache] = useState<{[key: string]: HTMLImageElement}>({})
+  // Removed unused imageScale state
   const [newPlanData, setNewPlanData] = useState({
     name: '',
-    buildingName: '',
+    corpus: '',
+    section: '',
     floor: 1
+  })
+  
+  // Filter state
+  const [filters, setFilters] = useState({
+    name: '',
+    corpus: '',
+    section: '',
+    floor: ''
   })
   
   // File input ref
@@ -97,8 +118,8 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     const vitrages = localStorage.getItem('saved-vitrages')
     if (vitrages) {
       try {
-        const parsed = JSON.parse(vitrages)
-        setSavedVitrages(parsed.map((v: any) => ({
+        const parsed = JSON.parse(vitrages) as VitrageGrid[]
+        setSavedVitrages(parsed.map((v) => ({
           ...v,
           createdAt: new Date(v.createdAt)
         })))
@@ -118,6 +139,33 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     // Load vitrages from VitrageSpecification storage
     loadVitragesFromStorage()
   }, [loadVitragesFromStorage])
+
+  // Auto-resize canvas to fit container
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      if (containerRef.current && !width && !height) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setCanvasDimensions({
+          width: Math.floor(rect.width - 40), // Account for padding
+          height: Math.floor(rect.height - 40)
+        })
+      }
+    }
+
+    // Use setTimeout to ensure DOM has updated after sidebar changes
+    const timeoutId = setTimeout(updateCanvasSize, 100)
+    
+    const handleResize = () => {
+      setTimeout(updateCanvasSize, 100)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    
+    return () => {
+      clearTimeout(timeoutId)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [width, height])
   
   // Reload vitrages when selector opens
   useEffect(() => {
@@ -125,6 +173,20 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
       loadVitragesFromStorage()
     }
   }, [showVitrageSelector, loadVitragesFromStorage])
+
+  // Load and cache background image
+  useEffect(() => {
+    if (currentPlan?.backgroundImage && !backgroundImageCache[currentPlan.backgroundImage]) {
+      const img = new Image()
+      img.onload = () => {
+        setBackgroundImageCache(prev => ({
+          ...prev,
+          [currentPlan.backgroundImage!]: img
+        }))
+      }
+      img.src = currentPlan.backgroundImage
+    }
+  }, [currentPlan?.backgroundImage, backgroundImageCache])
 
   // Save plans to localStorage
   const savePlansToStorage = useCallback((plans: FloorPlan[]) => {
@@ -137,7 +199,8 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     const newPlan: FloorPlan = {
       id: Date.now().toString(),
       name: newPlanData.name,
-      buildingName: newPlanData.buildingName,
+      corpus: newPlanData.corpus,
+      section: newPlanData.section,
       floor: newPlanData.floor,
       walls: [],
       rooms: [],
@@ -149,7 +212,7 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     
     setCurrentPlan(newPlan)
     setShowNewPlanDialog(false)
-    setNewPlanData({ name: '', buildingName: '', floor: 1 })
+    setNewPlanData({ name: '', corpus: '', section: '', floor: 1 })
   }
 
   // Save current plan
@@ -176,16 +239,68 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     setCurrentPlan(plan)
   }
 
-  // Get mouse position relative to canvas
+  // Get unique values for dropdowns
+  const uniqueCorpuses = [...new Set(savedPlans.map(plan => plan.corpus || plan.buildingName).filter(Boolean))].sort()
+  const uniqueSections = [...new Set(savedPlans.map(plan => plan.section).filter(Boolean))].sort()
+  const uniqueFloors = [...new Set(savedPlans.map(plan => plan.floor))].sort((a, b) => a - b)
+
+  // Filter plans based on current filters
+  const filteredPlans = savedPlans.filter(plan => {
+    return (
+      (filters.corpus === '' || (plan.corpus || plan.buildingName || '').toLowerCase() === filters.corpus.toLowerCase()) &&
+      (filters.section === '' || plan.section.toLowerCase() === filters.section.toLowerCase()) &&
+      (filters.floor === '' || plan.floor.toString() === filters.floor)
+    )
+  })
+
+  // Get mouse position relative to canvas (accounting for zoom and pan)
   const getMousePos = (e: React.MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
     
     const rect = canvas.getBoundingClientRect()
+    const rawX = e.clientX - rect.left
+    const rawY = e.clientY - rect.top
+    
+    // Transform coordinates based on zoom and pan
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: (rawX - panOffset.x) / zoomLevel,
+      y: (rawY - panOffset.y) / zoomLevel
     }
+  }
+
+  // Reset zoom function
+  const resetZoom = () => {
+    setZoomLevel(1)
+    setPanOffset({x: 0, y: 0})
+  }
+
+  // Handle wheel zoom (only with Shift key) - React event version
+  const handleWheel = (e: React.WheelEvent) => {
+    // Only zoom when Shift is pressed
+    if (!e.shiftKey) return
+    
+    // Don't prevent default - just handle our zoom logic
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    const rect = canvas.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
+    const newZoom = Math.max(0.1, Math.min(5, zoomLevel * zoomFactor))
+    
+    // Calculate the point in world coordinates before zoom
+    const worldX = (mouseX - panOffset.x) / zoomLevel
+    const worldY = (mouseY - panOffset.y) / zoomLevel
+    
+    // Calculate new pan offset to keep the same world point under the mouse
+    const newPanX = mouseX - worldX * newZoom
+    const newPanY = mouseY - worldY * newZoom
+    
+    setZoomLevel(newZoom)
+    setPanOffset({x: newPanX, y: newPanY})
   }
 
   // Handle mouse events
@@ -193,12 +308,27 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     if (!currentPlan) return
     
     const pos = getMousePos(e)
+    const rect = e.currentTarget.getBoundingClientRect()
+    const rawPos = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    }
     
-    if (currentTool === 'wall') {
-      setIsDrawing(true)
-      setStartPoint(pos)
-    } else if (currentTool === 'select' || currentTool === 'move') {
-      // Check if clicking on a vitrage
+    // Handle middle mouse button for panning
+    if (e.button === 1) {
+      setIsPanning(true)
+      setPanStart(rawPos)
+      return
+    }
+
+    // Only handle left mouse button
+    if (e.button !== 0) return
+    
+    if (selectedVitrageForPlacement) {
+      // Place vitrage at clicked position
+      placeVitrageAtPosition(pos.x, pos.y)
+    } else {
+      // Auto-select vitrage on left click (regardless of current tool)
       const clickedVitrage = currentPlan.placedVitrages.find(v => {
         const vitrage = savedVitrages.find(sv => sv.id === v.vitrageId)
         if (!vitrage) return false
@@ -219,39 +349,41 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
       } else {
         setSelectedItem(null)
       }
-    } else if (currentTool === 'delete' && selectedItem) {
-      // Delete selected vitrage
-      const updatedVitrages = currentPlan.placedVitrages.filter(v => v.id !== selectedItem)
-      setCurrentPlan({
-        ...currentPlan,
-        placedVitrages: updatedVitrages
-      })
-      setSelectedItem(null)
     }
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!currentPlan) return
     
+    const rect = e.currentTarget.getBoundingClientRect()
+    const rawPos = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    }
+    
+    // Handle panning
+    if (isPanning && panStart) {
+      const deltaX = rawPos.x - panStart.x
+      const deltaY = rawPos.y - panStart.y
+      
+      setPanOffset(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }))
+      
+      setPanStart(rawPos)
+      return
+    }
+    
     const pos = getMousePos(e)
     
-    if (isDrawing && currentTool === 'wall' && startPoint) {
-      // Redraw canvas with preview line
-      draw()
-      const canvas = canvasRef.current
-      const ctx = canvas?.getContext('2d')
-      if (ctx) {
-        ctx.strokeStyle = '#ff0000'
-        ctx.lineWidth = 2
-        ctx.setLineDash([5, 5])
-        ctx.beginPath()
-        ctx.moveTo(startPoint.x, startPoint.y)
-        ctx.lineTo(pos.x, pos.y)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
-    } else if (selectedItem && dragOffset && currentTool === 'move') {
-      // Move selected vitrage
+    // Track mouse position for vitrage preview
+    if (selectedVitrageForPlacement) {
+      setMousePosition(pos)
+    }
+    
+    if (selectedItem && dragOffset) {
+      // Auto-move selected vitrage when dragging
       const updatedVitrages = currentPlan.placedVitrages.map(v => 
         v.id === selectedItem ? {
           ...v,
@@ -267,43 +399,29 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     }
   }
 
-  const handleMouseUp = (e: React.MouseEvent) => {
+  const handleMouseUp = () => {
     if (!currentPlan) return
     
-    const pos = getMousePos(e)
-    
-    if (isDrawing && currentTool === 'wall' && startPoint) {
-      // Create new wall
-      const newWall: Wall = {
-        id: Date.now().toString(),
-        x1: startPoint.x,
-        y1: startPoint.y,
-        x2: pos.x,
-        y2: pos.y,
-        thickness: 200, // 200mm default
-        type: 'exterior'
-      }
-      
-      setCurrentPlan({
-        ...currentPlan,
-        walls: [...currentPlan.walls, newWall]
-      })
-    }
-    
-    setIsDrawing(false)
-    setStartPoint(null)
+    // Cleanup on mouse up
     setDragOffset(null)
+    setIsPanning(false)
+    setPanStart(null)
   }
 
   // Place vitrage from selector
-  const placeVitrage = (vitrageGrid: VitrageGrid) => {
-    if (!currentPlan) return
+  const selectVitrageForPlacement = (vitrageGrid: VitrageGrid) => {
+    setSelectedVitrageForPlacement(vitrageGrid)
+    setShowVitrageSelector(false)
+  }
+
+  const placeVitrageAtPosition = (x: number, y: number) => {
+    if (!currentPlan || !selectedVitrageForPlacement) return
     
     const newPlacedVitrage: PlacedVitrage = {
       id: Date.now().toString(),
-      vitrageId: vitrageGrid.id,
-      x: 100,
-      y: 100,
+      vitrageId: selectedVitrageForPlacement.id,
+      x: x,
+      y: y,
       rotation: 0,
       scale: 0.5 // Scale down for floor plan view
     }
@@ -313,8 +431,9 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
       placedVitrages: [...currentPlan.placedVitrages, newPlacedVitrage]
     })
     
-    setShowVitrageSelector(false)
-    setCurrentTool('move')
+    // Reset selection but keep tool active for placing more
+    setSelectedVitrageForPlacement(null)
+    setMousePosition(null)
   }
 
   // Drawing function
@@ -323,96 +442,61 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
     const ctx = canvas?.getContext('2d')
     if (!ctx || !currentPlan) return
 
-    // Clear canvas
-    ctx.fillStyle = '#f8f8f8'
-    ctx.fillRect(0, 0, width, height)
+    const { width: canvasWidth, height: canvasHeight } = canvasDimensions
 
-    // Draw background image if exists
-    if (currentPlan.backgroundImage) {
-      const img = new Image()
-      img.onload = () => {
-        ctx.save()
-        ctx.globalAlpha = currentPlan.backgroundOpacity || backgroundOpacity
-        
-        // Calculate scaling based on fit mode
-        const imgAspectRatio = img.width / img.height
-        const canvasAspectRatio = width / height
-        
-        let drawWidth = width
-        let drawHeight = height
-        let offsetX = 0
-        let offsetY = 0
-        
-        if (backgroundFitMode === 'contain') {
-          // Fit entire image within canvas (may have letterboxing)
-          if (imgAspectRatio > canvasAspectRatio) {
-            // Image is wider than canvas aspect ratio
-            drawWidth = width
-            drawHeight = width / imgAspectRatio
-            offsetY = (height - drawHeight) / 2
-          } else {
-            // Image is taller than canvas aspect ratio
-            drawHeight = height
-            drawWidth = height * imgAspectRatio
-            offsetX = (width - drawWidth) / 2
-          }
-        } else {
-          // Cover mode - fill entire canvas (may crop image)
-          if (imgAspectRatio > canvasAspectRatio) {
-            // Image is wider - fit height and crop width
-            drawHeight = height
-            drawWidth = height * imgAspectRatio
-            offsetX = (width - drawWidth) / 2
-          } else {
-            // Image is taller - fit width and crop height
-            drawWidth = width
-            drawHeight = width / imgAspectRatio
-            offsetY = (height - drawHeight) / 2
-          }
-        }
-        
-        // Draw image centered and scaled
-        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
-        ctx.restore()
-        
-        // Redraw everything on top of background
-        drawForeground()
-      }
-      img.src = currentPlan.backgroundImage
-    } else {
-      drawForeground()
-    }
+    // Clear canvas with white background
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+
+    drawForeground()
     
     function drawForeground() {
-      // Draw grid
-    ctx.strokeStyle = '#e0e0e0'
-    ctx.lineWidth = 1
-    const gridSize = 50
-    for (let x = 0; x <= width; x += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, height)
-      ctx.stroke()
-    }
-    for (let y = 0; y <= height; y += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(width, y)
-      ctx.stroke()
-    }
+      // No grid - clean white background
+      if (!ctx) return
 
-    // Draw walls
-    ctx.strokeStyle = '#333'
-    ctx.lineWidth = 8
-    currentPlan.walls.forEach(wall => {
-      ctx.beginPath()
-      ctx.moveTo(wall.x1, wall.y1)
-      ctx.lineTo(wall.x2, wall.y2)
-      ctx.stroke()
-    })
+      // Apply zoom and pan transformations
+      ctx.save()
+      ctx.translate(panOffset.x, panOffset.y)
+      ctx.scale(zoomLevel, zoomLevel)
+
+      // Draw background image if exists and cached
+      if (currentPlan?.backgroundImage && backgroundImageCache[currentPlan.backgroundImage]) {
+        const img = backgroundImageCache[currentPlan.backgroundImage]
+        ctx.save()
+        ctx.globalAlpha = currentPlan?.backgroundOpacity || backgroundOpacity
+        
+        // Calculate world space dimensions
+        const worldWidth = canvasDimensions.width / zoomLevel
+        const worldHeight = canvasDimensions.height / zoomLevel
+        const worldX = -panOffset.x / zoomLevel
+        const worldY = -panOffset.y / zoomLevel
+        
+        // Calculate scaling to fit image properly
+        const imgAspectRatio = img.width / img.height
+        const worldAspectRatio = worldWidth / worldHeight
+        
+        let drawWidth, drawHeight, offsetX, offsetY
+        
+        if (imgAspectRatio > worldAspectRatio) {
+          // Image is wider - fit width
+          drawWidth = worldWidth
+          drawHeight = worldWidth / imgAspectRatio
+          offsetX = worldX
+          offsetY = worldY + (worldHeight - drawHeight) / 2
+        } else {
+          // Image is taller - fit height  
+          drawHeight = worldHeight
+          drawWidth = worldHeight * imgAspectRatio
+          offsetX = worldX + (worldWidth - drawWidth) / 2
+          offsetY = worldY
+        }
+        
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
+        ctx.restore()
+      }
 
     // Draw placed vitrages
-    currentPlan.placedVitrages.forEach(placedVitrage => {
+    currentPlan?.placedVitrages.forEach(placedVitrage => {
       const vitrage = savedVitrages.find(v => v.id === placedVitrage.vitrageId)
       if (!vitrage) return
 
@@ -478,13 +562,127 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
 
       ctx.restore()
     })
+
+    // Draw vitrage preview when placing
+    if (selectedVitrageForPlacement && mousePosition) {
+      const vitrage = selectedVitrageForPlacement
+      
+      ctx.save()
+      ctx.translate(mousePosition.x, mousePosition.y)
+      ctx.scale(0.5, 0.5) // Same scale as placed vitrages
+      
+      const displayWidth = vitrage.totalWidth * 0.1
+      const displayHeight = vitrage.totalHeight * 0.1
+      
+      // Draw preview with transparency
+      ctx.globalAlpha = 0.6
+      
+      // Draw vitrage background
+      ctx.fillStyle = '#e3f2fd'
+      ctx.fillRect(0, 0, displayWidth, displayHeight)
+      
+      // Draw vitrage border
+      ctx.strokeStyle = '#2196F3'
+      ctx.lineWidth = 2
+      ctx.setLineDash([5, 5]) // Dashed border for preview
+      ctx.strokeRect(0, 0, displayWidth, displayHeight)
+      
+      // Draw grid lines
+      ctx.strokeStyle = '#bbb'
+      ctx.lineWidth = 1
+      ctx.setLineDash([2, 2])
+      const segmentWidth = displayWidth / vitrage.cols
+      const segmentHeight = displayHeight / vitrage.rows
+      
+      // Vertical lines
+      for (let col = 1; col < vitrage.cols; col++) {
+        ctx.beginPath()
+        ctx.moveTo(col * segmentWidth, 0)
+        ctx.lineTo(col * segmentWidth, displayHeight)
+        ctx.stroke()
+      }
+      
+      // Horizontal lines
+      for (let row = 1; row < vitrage.rows; row++) {
+        ctx.beginPath()
+        ctx.moveTo(0, row * segmentHeight)
+        ctx.lineTo(displayWidth, row * segmentHeight)
+        ctx.stroke()
+      }
+      
+      // Draw vitrage name
+      ctx.globalAlpha = 0.8
+      ctx.fillStyle = '#1976d2'
+      ctx.font = 'bold 14px Arial'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.setLineDash([]) // Solid text
+      ctx.fillText(
+        vitrage.name, 
+        displayWidth / 2, 
+        displayHeight / 2
+      )
+      
+      // Draw "click to place" hint
+      ctx.fillStyle = '#666'
+      ctx.font = '10px Arial'
+      ctx.fillText(
+        'Нажмите для размещения',
+        displayWidth / 2,
+        displayHeight + 15
+      )
+      
+      ctx.restore()
     }
-  }, [currentPlan, savedVitrages, selectedItem, width, height, backgroundOpacity, backgroundFitMode])
+    
+    // Restore zoom and pan transformations
+    ctx.restore()
+    }
+  }, [currentPlan, savedVitrages, selectedItem, canvasDimensions, backgroundOpacity, selectedVitrageForPlacement, mousePosition, zoomLevel, panOffset, backgroundImageCache])
 
   // Redraw on state changes
   useEffect(() => {
     draw()
   }, [draw])
+
+
+
+  // Auto-scroll to vitrage info when selected
+  useEffect(() => {
+    if (selectedItem) {
+      // Find vitrage info section by text content
+      const h3Elements = document.querySelectorAll('.sidebar-section h3')
+      let vitrageInfoSection = null
+      
+      h3Elements.forEach(h3 => {
+        if (h3.textContent === 'Информация о витраже') {
+          vitrageInfoSection = h3.parentElement
+        }
+      })
+      
+      if (vitrageInfoSection) {
+        vitrageInfoSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    }
+  }, [selectedItem])
+
+  // Handle keyboard events for Delete key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedItem && currentPlan) {
+        // Delete selected vitrage
+        const updatedVitrages = currentPlan.placedVitrages.filter(v => v.id !== selectedItem)
+        setCurrentPlan({
+          ...currentPlan,
+          placedVitrages: updatedVitrages
+        })
+        setSelectedItem(null)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectedItem, currentPlan])
   
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -541,27 +739,74 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
 
   return (
     <div className="floor-plan-editor">
-      <div className="editor-toolbar">
-        <div className="toolbar-section">
-          <button 
-            className={!currentPlan ? 'primary' : 'secondary'}
-            onClick={() => setShowNewPlanDialog(true)}
+      <div className="editor-toolbar compact-toolbar">
+        {/* Plan Actions Dropdown */}
+        <div className="dropdown-container">
+          <select 
+            className="dropdown-select plan-actions"
+            onChange={(e) => {
+              const action = e.target.value
+              if (action === 'open') setShowPlanSelector(true)
+              else if (action === 'new') setShowNewPlanDialog(true)
+              else if (action === 'save' && currentPlan) saveCurrentPlan()
+              e.target.value = '' // Reset selection
+            }}
+            value=""
           >
-            <span className="icon">📋</span>
-            <span>Новый план</span>
-          </button>
-          
-          {currentPlan && (
-            <button className="secondary" onClick={saveCurrentPlan}>
-              <span className="icon">💾</span>
-              <span>Сохранить</span>
+            <option value="" disabled>📋 План</option>
+            <option value="open">📂 Открыть план</option>
+            <option value="new">📋 Новый план</option>
+            {currentPlan && <option value="save">💾 Сохранить</option>}
+          </select>
+        </div>
+
+        {/* Filters */}
+        <div className="compact-filters">
+          <select
+            value={filters.corpus}
+            onChange={(e) => setFilters({...filters, corpus: e.target.value})}
+            className="toolbar-filter-select"
+          >
+            <option value="">Все корпуса</option>
+            {uniqueCorpuses.map(corpus => (
+              <option key={corpus} value={corpus}>{corpus}</option>
+            ))}
+          </select>
+          <select
+            value={filters.section}
+            onChange={(e) => setFilters({...filters, section: e.target.value})}
+            className="toolbar-filter-select"
+          >
+            <option value="">Все секции</option>
+            {uniqueSections.map(section => (
+              <option key={section} value={section}>{section}</option>
+            ))}
+          </select>
+          <select
+            value={filters.floor}
+            onChange={(e) => setFilters({...filters, floor: e.target.value})}
+            className="toolbar-filter-select"
+          >
+            <option value="">Все этажи</option>
+            {uniqueFloors.map(floor => (
+              <option key={floor} value={floor.toString()}>{floor} эт.</option>
+            ))}
+          </select>
+          {(filters.corpus || filters.section || filters.floor) && (
+            <button 
+              className="clear-filters-toolbar-btn"
+              onClick={() => setFilters({name: '', corpus: '', section: '', floor: ''})}
+              title="Очистить фильтры"
+            >
+              ✕
             </button>
           )}
         </div>
 
         {currentPlan && (
           <>
-            <div className="toolbar-section">
+            {/* Import Actions Dropdown */}
+            <div className="dropdown-container">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -569,91 +814,51 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
                 onChange={handleFileUpload}
                 style={{ display: 'none' }}
               />
-              <button
-                className="secondary"
-                onClick={() => fileInputRef.current?.click()}
-                title="Загрузить подложку"
+              <select 
+                className="dropdown-select import-actions"
+                onChange={(e) => {
+                  const action = e.target.value
+                  if (action === 'import') fileInputRef.current?.click()
+                  else if (action === 'delete') removeBackground()
+                  e.target.value = '' // Reset selection
+                }}
+                value=""
               >
-                <span className="icon">📄</span>
-                <span>Подложка</span>
-              </button>
-              {currentPlan.backgroundImage && (
-                <>
-                  <button
-                    className="secondary"
-                    onClick={removeBackground}
-                    title="Удалить подложку"
-                  >
-                    <span className="icon">❌</span>
-                    <span>Удалить фон</span>
-                  </button>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px' }}>Прозрачность:</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={currentPlan.backgroundOpacity || backgroundOpacity}
-                      onChange={(e) => updateBackgroundOpacity(parseFloat(e.target.value))}
-                      style={{ width: '100px' }}
-                    />
-                    <span style={{ fontSize: '12px' }}>
-                      {Math.round((currentPlan.backgroundOpacity || backgroundOpacity) * 100)}%
-                    </span>
-                  </label>
-                  <button
-                    className="secondary"
-                    onClick={() => setBackgroundFitMode(backgroundFitMode === 'contain' ? 'cover' : 'contain')}
-                    title={backgroundFitMode === 'contain' ? 'Переключить на заполнение' : 'Переключить на вписывание'}
-                    style={{ fontSize: '10px', padding: '6px 10px' }}
-                  >
-                    <span className="icon" style={{ fontSize: '14px' }}>
-                      {backgroundFitMode === 'contain' ? '⬜' : '◼'}
-                    </span>
-                    <span>{backgroundFitMode === 'contain' ? 'Вписать' : 'Заполнить'}</span>
-                  </button>
-                </>
-              )}
+                <option value="" disabled>📄 Подложка</option>
+                <option value="import">📄 Импорт плана этажа</option>
+                {currentPlan.backgroundImage && <option value="delete">❌ Удалить подложку этажа</option>}
+              </select>
             </div>
-            <div className="toolbar-section">
-              <div className="tool-group">
-              {(['select', 'wall', 'vitrage', 'move', 'delete'] as Tool[]).map(tool => (
-                <button
-                  key={tool}
-                  className={currentTool === tool ? 'active' : 'secondary'}
-                  onClick={() => {
-                    setCurrentTool(tool)
-                    if (tool === 'vitrage') {
-                      setShowVitrageSelector(true)
-                    }
-                  }}
-                  title={{
-                    select: 'Выбор элементов',
-                    wall: 'Рисование стен',
-                    vitrage: 'Вставка витража',
-                    move: 'Перемещение',
-                    delete: 'Удаление'
-                  }[tool]}
-                >
-                  <span className="icon">
-                    {tool === 'select' && '🔍'}
-                    {tool === 'wall' && '🧱'}
-                    {tool === 'vitrage' && '🪟'}
-                    {tool === 'move' && '↔️'}
-                    {tool === 'delete' && '🗑️'}
-                  </span>
-                  <span className="label">
-                    {tool === 'select' && 'Выбор'}
-                    {tool === 'wall' && 'Стены'}
-                    {tool === 'vitrage' && 'Витражи'}
-                    {tool === 'move' && 'Перенос'}
-                    {tool === 'delete' && 'Удалить'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+
+            {/* Transparency Slider */}
+            {currentPlan.backgroundImage && (
+              <div className="transparency-container">
+                <span className="transparency-label">Прозрачность:</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={currentPlan.backgroundOpacity || backgroundOpacity}
+                  onChange={(e) => updateBackgroundOpacity(parseFloat(e.target.value))}
+                  className="transparency-slider"
+                />
+                <span className="transparency-value">
+                  {Math.round((currentPlan.backgroundOpacity || backgroundOpacity) * 100)}%
+                </span>
+              </div>
+            )}
+
+            {/* Add Vitrage Button */}
+            <button 
+              className="toolbar-btn primary"
+              onClick={() => setShowVitrageSelector(true)}
+              title="Добавить витраж на план"
+            >
+              🪟 Добавить витраж
+            </button>
+
+
           </>
         )}
       </div>
@@ -662,8 +867,9 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
         <div className="editor-sidebar">
           <div className="sidebar-section">
             <h3>Сохраненные планы</h3>
+            
             <div className="plans-list">
-              {savedPlans.map(plan => (
+              {filteredPlans.map(plan => (
                 <div 
                   key={plan.id} 
                   className={`plan-item ${currentPlan?.id === plan.id ? 'active' : ''}`}
@@ -671,7 +877,7 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
                 >
                   <div className="plan-name">{plan.name}</div>
                   <div className="plan-details">
-                    {plan.buildingName} - Этаж {plan.floor}
+                    {plan.corpus || plan.buildingName || 'Корпус не указан'} / {plan.section || 'Секция не указана'} - Этаж {plan.floor}
                   </div>
                 </div>
               ))}
@@ -684,16 +890,16 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
                 <h3>Свойства плана</h3>
                 <div className="properties">
                   <div>Название: {currentPlan.name}</div>
-                  <div>Здание: {currentPlan.buildingName}</div>
+                  <div>Корпус: {currentPlan.corpus || currentPlan.buildingName || 'Не указан'}</div>
+                  <div>Секция: {currentPlan.section || 'Не указана'}</div>
                   <div>Этаж: {currentPlan.floor}</div>
-                  <div>Стен: {currentPlan.walls.length}</div>
                   <div>Витражей: {currentPlan.placedVitrages.length}</div>
                 </div>
               </div>
               
               {selectedItem && (
                 <div className="sidebar-section">
-                  <h3>Выбранный витраж</h3>
+                  <h3>Информация о витраже</h3>
                   <div className="properties">
                     {(() => {
                       const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
@@ -703,8 +909,6 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
                           <>
                             <div>Название: {vitrage.name}</div>
                             <div>Размер: {vitrage.totalWidth}×{vitrage.totalHeight}мм</div>
-                            <div>Сетка: {vitrage.rows}×{vitrage.cols}</div>
-                            <div>Поворот: {placedVitrage?.rotation}°</div>
                             <button 
                               className="secondary"
                               style={{marginTop: '8px', width: '100%'}}
@@ -735,15 +939,16 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
           )}
         </div>
 
-        <div className="canvas-container">
+        <div ref={containerRef} className="canvas-container">
           {currentPlan ? (
             <canvas
               ref={canvasRef}
-              width={width}
-              height={height}
+              width={canvasDimensions.width}
+              height={canvasDimensions.height}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
+              onWheel={handleWheel}
             />
           ) : (
             <div className="no-plan-message">
@@ -769,12 +974,21 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
               />
             </div>
             <div className="form-group">
-              <label>Название здания:</label>
+              <label>Корпус:</label>
               <input
                 type="text"
-                value={newPlanData.buildingName}
-                onChange={(e) => setNewPlanData({...newPlanData, buildingName: e.target.value})}
-                placeholder="Административное здание"
+                value={newPlanData.corpus}
+                onChange={(e) => setNewPlanData({...newPlanData, corpus: e.target.value})}
+                placeholder="Корпус А"
+              />
+            </div>
+            <div className="form-group">
+              <label>Секция:</label>
+              <input
+                type="text"
+                value={newPlanData.section}
+                onChange={(e) => setNewPlanData({...newPlanData, section: e.target.value})}
+                placeholder="Секция 1"
               />
             </div>
             <div className="form-group">
@@ -793,7 +1007,7 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
               <button 
                 className="primary" 
                 onClick={createNewPlan}
-                disabled={!newPlanData.name || !newPlanData.buildingName}
+                disabled={!newPlanData.name || !newPlanData.corpus || !newPlanData.section}
               >
                 Создать
               </button>
@@ -802,6 +1016,92 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
         </div>
       )}
 
+      {/* Plan Selector Modal */}
+      {showPlanSelector && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Выберите план этажа</h3>
+            {savedPlans.length > 0 ? (
+              <>
+                <div className="plan-selector">
+                  <select 
+                    onChange={(e) => {
+                      const selectedPlan = savedPlans.find(p => p.id === e.target.value)
+                      if (selectedPlan) {
+                        loadPlan(selectedPlan)
+                        setShowPlanSelector(false)
+                      }
+                    }}
+                    defaultValue=""
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      border: '1px solid rgba(173, 216, 230, 0.3)',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(255, 255, 255, 0.9)',
+                      color: 'var(--text-dark)',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      marginBottom: '20px'
+                    }}
+                  >
+                    <option value="" disabled>Выберите план...</option>
+                    {savedPlans.map(plan => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} - {plan.corpus || plan.buildingName || 'Корпус не указан'} / {plan.section || 'Секция не указана'} (Этаж {plan.floor})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="plans-preview">
+                  {savedPlans.map(plan => (
+                    <div 
+                      key={plan.id} 
+                      className="plan-preview-item"
+                      onClick={() => {
+                        loadPlan(plan)
+                        setShowPlanSelector(false)
+                      }}
+                      style={{
+                        padding: '16px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        marginBottom: '12px',
+                        cursor: 'pointer',
+                        transition: 'all var(--transition-fast)'
+                      }}
+                    >
+                      <div style={{fontWeight: '700', color: 'var(--text-white)', marginBottom: '6px'}}>
+                        {plan.name}
+                      </div>
+                      <div style={{fontSize: '12px', color: 'rgba(255, 255, 255, 0.8)'}}>
+                        {plan.corpus || plan.buildingName || 'Корпус не указан'} / {plan.section || 'Секция не указана'} - Этаж {plan.floor}
+                      </div>
+                      <div style={{fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '4px'}}>
+                        Витражей: {plan.placedVitrages.length} | Создан: {new Date(plan.createdAt).toLocaleDateString('ru-RU')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{padding: '40px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.8)'}}>
+                <p style={{marginBottom: '16px'}}>Нет сохраненных планов</p>
+                <p style={{fontSize: '14px'}}>
+                  Создайте новый план для начала работы
+                </p>
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setShowPlanSelector(false)}>
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Vitrage Selector Dialog */}
       {showVitrageSelector && (
         <div className="modal-overlay">
@@ -809,7 +1109,7 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
             <h3>Выберите витраж для размещения</h3>
             {savedVitrages.length > 0 ? (
               <>
-                <p style={{marginBottom: '16px', color: '#666'}}>
+                <p style={{marginBottom: '16px', color: 'rgba(255, 255, 255, 0.8)'}}>
                   Витражи загружаются из вкладки "Спецификация витражей"
                 </p>
                 <div className="vitrage-grid">
@@ -817,7 +1117,7 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
                     <div 
                       key={vitrage.id} 
                       className="vitrage-card"
-                      onClick={() => placeVitrage(vitrage)}
+                      onClick={() => selectVitrageForPlacement(vitrage)}
                     >
                       <div className="vitrage-preview">
                         <div className="vitrage-name">{vitrage.name}</div>
@@ -827,7 +1127,7 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
                         <div className="vitrage-grid-info">
                           {vitrage.rows}×{vitrage.cols} сегментов
                         </div>
-                        <div style={{marginTop: '8px', fontSize: '11px', color: '#999'}}>
+                        <div style={{marginTop: '8px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)'}}>
                           Создан: {new Date(vitrage.createdAt).toLocaleDateString('ru-RU')}
                         </div>
                       </div>
@@ -836,7 +1136,7 @@ export default function FloorPlanEditor({ width = 1000, height = 700 }: FloorPla
                 </div>
               </>
             ) : (
-              <div style={{padding: '40px', textAlign: 'center', color: '#666'}}>
+              <div style={{padding: '40px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.8)'}}>
                 <p style={{marginBottom: '16px'}}>Нет сохраненных витражей</p>
                 <p style={{fontSize: '14px'}}>
                   Перейдите во вкладку "Спецификация витражей" для просмотра и создания витражей

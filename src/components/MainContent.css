@@ -93,6 +93,17 @@
   height: 750px;
 }
 
+.responsive-graphics {
+  height: calc(100vh - 200px);
+  min-height: 600px;
+  transition: all 0.3s ease;
+}
+
+/* Adjust graphics container when sidebar is collapsed */
+.layout.sidebar-collapsed .responsive-graphics {
+  height: calc(100vh - 180px);
+}
+
 /* Welcome section styling */
 .content-section:has(h2:contains("Добро пожаловать")) .content-card {
   background: linear-gradient(135deg, 
@@ -200,4 +211,95 @@
   .graphics-container {
     height: 500px;
   }
+}
+
+/* Fullscreen section styles */
+.fullscreen-section {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  background: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  margin: 0 !important;
+}
+
+/* Compact header for fullscreen mode */
+.compact-header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(173, 216, 230, 0.3);
+  padding: 12px 0;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.compact-header .header-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.compact-header h2 {
+  margin: 0;
+  padding: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-dark);
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.exit-fullscreen-btn {
+  position: absolute;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(173, 216, 230, 0.5);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.exit-fullscreen-btn:hover {
+  background: rgba(255, 0, 0, 0.1);
+  border-color: #ff4444;
+  color: #ff4444;
+  transform: scale(1.1);
+}
+
+/* Fullscreen container */
+.fullscreen-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Override floor plan editor styles for fullscreen */
+.fullscreen-section .floor-plan-editor {
+  width: 100%;
+  height: 100%;
+  background: #f5f5f5;
+}
+
+.fullscreen-section .editor-content {
+  height: 100%;
+}
+
+.fullscreen-section .canvas-container {
+  background: #f5f5f5;
 }
