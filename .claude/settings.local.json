@@ -16,7 +16,10 @@
       "Bash(git remote set-url:*)",
       "Bash(npm run lint)",
       "Bash(npm run build:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(git pull:*)"
     ],
     "deny": [],
     "ask": []
