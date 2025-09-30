@@ -80,11 +80,15 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   
   // UI state
   const [showNewPlanDialog, setShowNewPlanDialog] = useState(false)
+  const [showDuplicatePlanDialog, setShowDuplicatePlanDialog] = useState(false)
   const [showVitrageSelector, setShowVitrageSelector] = useState(false)
   const [showPlanSelector, setShowPlanSelector] = useState(false)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.3)
   const [selectedVitrageForPlacement, setSelectedVitrageForPlacement] = useState<VitrageGrid | null>(null)
   const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [planToDuplicate, setPlanToDuplicate] = useState<FloorPlan | null>(null)
   
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -96,6 +100,13 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   const [backgroundImageCache, setBackgroundImageCache] = useState<{[key: string]: HTMLImageElement}>({})
   // Removed unused imageScale state
   const [newPlanData, setNewPlanData] = useState({
+    name: '',
+    corpus: '',
+    section: '',
+    floor: 1
+  })
+
+  const [duplicatePlanData, setDuplicatePlanData] = useState({
     name: '',
     corpus: '',
     section: '',
@@ -209,19 +220,33 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
       createdAt: new Date(),
       updatedAt: new Date()
     }
-    
+
+    // Add new plan to saved plans list
+    const newPlans = [...savedPlans, newPlan]
+    savePlansToStorage(newPlans)
+
+    // Set as current plan
     setCurrentPlan(newPlan)
+    setHasUnsavedChanges(false)
+    setSaveStatus('saved')
+
+    // Close dialog and reset form
     setShowNewPlanDialog(false)
     setNewPlanData({ name: '', corpus: '', section: '', floor: 1 })
+
+    // Clear filters to ensure new plan is visible
+    setFilters({ name: '', corpus: '', section: '', floor: '' })
   }
 
   // Save current plan
-  const saveCurrentPlan = () => {
+  const saveCurrentPlan = useCallback(() => {
     if (!currentPlan) return
-    
+
+    setSaveStatus('saving')
+
     const updatedPlan = { ...currentPlan, updatedAt: new Date() }
     const existingIndex = savedPlans.findIndex(p => p.id === updatedPlan.id)
-    
+
     let newPlans
     if (existingIndex >= 0) {
       newPlans = [...savedPlans]
@@ -229,14 +254,96 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
     } else {
       newPlans = [...savedPlans, updatedPlan]
     }
-    
+
     savePlansToStorage(newPlans)
     setCurrentPlan(updatedPlan)
+    setHasUnsavedChanges(false)
+    setSaveStatus('saved')
+  }, [currentPlan, savedPlans, savePlansToStorage])
+
+  // Auto-save when plan changes
+  useEffect(() => {
+    if (!currentPlan || !hasUnsavedChanges) return
+
+    const timeoutId = setTimeout(() => {
+      saveCurrentPlan()
+    }, 2000) // Auto-save after 2 seconds of inactivity
+
+    return () => clearTimeout(timeoutId)
+  }, [currentPlan, hasUnsavedChanges, saveCurrentPlan])
+
+  // Mark plan as changed when vitrage positions change
+  const updateCurrentPlan = useCallback((updater: (plan: FloorPlan) => FloorPlan) => {
+    if (!currentPlan) return
+
+    const newPlan = updater(currentPlan)
+    setCurrentPlan(newPlan)
+    setHasUnsavedChanges(true)
+    setSaveStatus('unsaved')
+  }, [currentPlan])
+
+  // Open duplicate plan dialog
+  const openDuplicatePlanDialog = useCallback((plan: FloorPlan) => {
+    setPlanToDuplicate(plan)
+    setDuplicatePlanData({
+      name: `${plan.name} (копия)`,
+      corpus: plan.corpus,
+      section: plan.section,
+      floor: plan.floor
+    })
+    setShowDuplicatePlanDialog(true)
+  }, [])
+
+  // Create duplicate plan with new data
+  const createDuplicatePlan = () => {
+    if (!planToDuplicate) return
+
+    const newPlan: FloorPlan = {
+      ...planToDuplicate,
+      id: Date.now().toString(),
+      name: duplicatePlanData.name,
+      corpus: duplicatePlanData.corpus,
+      section: duplicatePlanData.section,
+      floor: duplicatePlanData.floor,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    const newPlans = [...savedPlans, newPlan]
+    savePlansToStorage(newPlans)
+    setCurrentPlan(newPlan)
+    setHasUnsavedChanges(false)
+    setSaveStatus('saved')
+
+    // Close dialog and reset
+    setShowDuplicatePlanDialog(false)
+    setPlanToDuplicate(null)
+    setDuplicatePlanData({ name: '', corpus: '', section: '', floor: 1 })
+
+    // Clear filters to ensure new plan is visible
+    setFilters({ name: '', corpus: '', section: '', floor: '' })
   }
+
+  // Delete plan function
+  const deletePlan = useCallback((planToDelete: FloorPlan) => {
+    if (confirm(`Вы уверены, что хотите удалить план "${planToDelete.name}"?`)) {
+      const newPlans = savedPlans.filter(p => p.id !== planToDelete.id)
+      savePlansToStorage(newPlans)
+
+      // If deleted plan was current, clear it
+      if (currentPlan?.id === planToDelete.id) {
+        setCurrentPlan(null)
+        setHasUnsavedChanges(false)
+        setSaveStatus('saved')
+      }
+    }
+  }, [savedPlans, savePlansToStorage, currentPlan])
 
   // Load plan
   const loadPlan = (plan: FloorPlan) => {
     setCurrentPlan(plan)
+    setHasUnsavedChanges(false)
+    setSaveStatus('saved')
   }
 
   // Get unique values for dropdowns
@@ -252,6 +359,22 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
       (filters.floor === '' || plan.floor.toString() === filters.floor)
     )
   })
+
+  // Auto-open plan when filters result in a single plan or when current plan is not in filtered results
+  useEffect(() => {
+    if (filteredPlans.length === 1 && currentPlan?.id !== filteredPlans[0].id) {
+      // Auto-open when only one plan matches filters
+      loadPlan(filteredPlans[0])
+    } else if (filteredPlans.length > 1 && currentPlan && !filteredPlans.find(p => p.id === currentPlan.id)) {
+      // If current plan is not in filtered results, open the first filtered plan
+      loadPlan(filteredPlans[0])
+    } else if (filteredPlans.length === 0 && currentPlan) {
+      // If no plans match filters, clear current plan
+      setCurrentPlan(null)
+      setHasUnsavedChanges(false)
+      setSaveStatus('saved')
+    }
+  }, [filteredPlans, currentPlan])
 
   // Get mouse position relative to canvas (accounting for zoom and pan)
   const getMousePos = (e: React.MouseEvent) => {
@@ -332,12 +455,48 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
       const clickedVitrage = currentPlan.placedVitrages.find(v => {
         const vitrage = savedVitrages.find(sv => sv.id === v.vitrageId)
         if (!vitrage) return false
-        
+
         const vitrageWidth = vitrage.totalWidth * 0.1 * v.scale
         const vitrageHeight = vitrage.totalHeight * 0.1 * v.scale
-        
-        return pos.x >= v.x && pos.x <= v.x + vitrageWidth && 
-               pos.y >= v.y && pos.y <= v.y + vitrageHeight
+
+        console.log(`Checking vitrage ${vitrage.name}, rotation: ${v.rotation}, pos: ${pos.x}, ${pos.y}`)
+        console.log(`Vitrage position: ${v.x}, ${v.y}, size: ${vitrageWidth}x${vitrageHeight}`)
+
+        // For rotated vitrages, we need to check if click is within rotated bounds
+        if (v.rotation === 0) {
+          // No rotation - simple rectangle check
+          const hit = pos.x >= v.x && pos.x <= v.x + vitrageWidth &&
+                      pos.y >= v.y && pos.y <= v.y + vitrageHeight
+          console.log(`No rotation check: ${hit}`)
+          return hit
+        } else {
+          // For rotated rectangles, transform the click point to local coordinates
+          // The vitrage is rotated around point (v.x, v.y) - the top-left corner
+          const rotation = v.rotation
+
+          // Translate click point relative to rotation origin (v.x, v.y)
+          const localX = pos.x - v.x
+          const localY = pos.y - v.y
+
+          console.log(`Local click before rotation: ${localX}, ${localY}`)
+
+          // Rotate the local point back by negative rotation to get original coordinates
+          const radians = (-rotation * Math.PI) / 180
+          const cosR = Math.cos(radians)
+          const sinR = Math.sin(radians)
+
+          const originalX = localX * cosR - localY * sinR
+          const originalY = localX * sinR + localY * cosR
+
+          console.log(`Original coordinates: ${originalX}, ${originalY}`)
+
+          // Check if original point is within the unrotated rectangle bounds (0,0) to (width,height)
+          const hit = originalX >= 0 && originalX <= vitrageWidth &&
+                      originalY >= 0 && originalY <= vitrageHeight
+
+          console.log(`Rotation check: ${hit}, bounds: 0-${vitrageWidth}, 0-${vitrageHeight}`)
+          return hit
+        }
       })
       
       if (clickedVitrage) {
@@ -384,18 +543,16 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
     
     if (selectedItem && dragOffset) {
       // Auto-move selected vitrage when dragging
-      const updatedVitrages = currentPlan.placedVitrages.map(v => 
-        v.id === selectedItem ? {
-          ...v,
-          x: pos.x - dragOffset.x,
-          y: pos.y - dragOffset.y
-        } : v
-      )
-      
-      setCurrentPlan({
-        ...currentPlan,
-        placedVitrages: updatedVitrages
-      })
+      updateCurrentPlan(plan => ({
+        ...plan,
+        placedVitrages: plan.placedVitrages.map(v =>
+          v.id === selectedItem ? {
+            ...v,
+            x: pos.x - dragOffset.x,
+            y: pos.y - dragOffset.y
+          } : v
+        )
+      }))
     }
   }
 
@@ -426,10 +583,10 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
       scale: 0.5 // Scale down for floor plan view
     }
     
-    setCurrentPlan({
-      ...currentPlan,
-      placedVitrages: [...currentPlan.placedVitrages, newPlacedVitrage]
-    })
+    updateCurrentPlan(plan => ({
+      ...plan,
+      placedVitrages: [...plan.placedVitrages, newPlacedVitrage]
+    }))
     
     // Reset selection but keep tool active for placing more
     setSelectedVitrageForPlacement(null)
@@ -661,7 +818,7 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
       })
       
       if (vitrageInfoSection) {
-        vitrageInfoSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        (vitrageInfoSection as Element).scrollIntoView({ behavior: 'smooth', block: 'nearest' })
       }
     }
   }, [selectedItem])
@@ -671,35 +828,47 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Delete' && selectedItem && currentPlan) {
         // Delete selected vitrage
-        const updatedVitrages = currentPlan.placedVitrages.filter(v => v.id !== selectedItem)
-        setCurrentPlan({
-          ...currentPlan,
-          placedVitrages: updatedVitrages
-        })
+        updateCurrentPlan(plan => ({
+          ...plan,
+          placedVitrages: plan.placedVitrages.filter(v => v.id !== selectedItem)
+        }))
         setSelectedItem(null)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedItem, currentPlan])
+  }, [selectedItem, currentPlan, updateCurrentPlan])
   
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !currentPlan) return
-    
+    console.log('File selected:', file)
+
+    if (!file || !currentPlan) {
+      console.log('No file or no current plan')
+      return
+    }
+
     if (file.type === 'application/pdf' || file.type.includes('image')) {
+      console.log('Valid file type:', file.type)
+
       const reader = new FileReader()
       reader.onload = (event) => {
         const result = event.target?.result as string
-        setCurrentPlan({
-          ...currentPlan,
+        console.log('File loaded, updating plan with background')
+        updateCurrentPlan(plan => ({
+          ...plan,
           backgroundImage: result,
           backgroundOpacity: backgroundOpacity
-        })
+        }))
       }
-      
+
+      reader.onerror = () => {
+        console.error('Error reading file')
+        alert('Ошибка при загрузке файла')
+      }
+
       if (file.type === 'application/pdf') {
         // For PDF files, we'll convert first page to image
         // Note: In production, you'd want to use a library like pdf.js
@@ -708,8 +877,11 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
       } else {
         reader.readAsDataURL(file)
       }
+    } else {
+      console.log('Invalid file type:', file.type)
+      alert('Поддерживаются только изображения (PNG, JPG, JPEG, GIF, BMP)')
     }
-    
+
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -719,21 +891,21 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   // Remove background
   const removeBackground = () => {
     if (!currentPlan) return
-    setCurrentPlan({
-      ...currentPlan,
+    updateCurrentPlan(plan => ({
+      ...plan,
       backgroundImage: undefined,
       backgroundOpacity: undefined
-    })
+    }))
   }
   
   // Update background opacity
   const updateBackgroundOpacity = (opacity: number) => {
     setBackgroundOpacity(opacity)
     if (currentPlan && currentPlan.backgroundImage) {
-      setCurrentPlan({
-        ...currentPlan,
+      updateCurrentPlan(plan => ({
+        ...plan,
         backgroundOpacity: opacity
-      })
+      }))
     }
   }
 
@@ -741,59 +913,73 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
     <div className="floor-plan-editor">
       <div className="editor-toolbar compact-toolbar">
         {/* Plan Actions Dropdown */}
-        <div className="dropdown-container">
-          <select 
+        <div className="filter-group">
+          <label className="filter-label">План:</label>
+          <select
             className="dropdown-select plan-actions"
             onChange={(e) => {
               const action = e.target.value
               if (action === 'open') setShowPlanSelector(true)
               else if (action === 'new') setShowNewPlanDialog(true)
               else if (action === 'save' && currentPlan) saveCurrentPlan()
+              else if (action === 'duplicate' && currentPlan) openDuplicatePlanDialog(currentPlan)
               e.target.value = '' // Reset selection
             }}
             value=""
           >
-            <option value="" disabled>📋 План</option>
             <option value="open">📂 Открыть план</option>
             <option value="new">📋 Новый план</option>
             {currentPlan && <option value="save">💾 Сохранить</option>}
+            {currentPlan && <option value="duplicate">📋 Дублировать план</option>}
           </select>
         </div>
 
         {/* Filters */}
         <div className="compact-filters">
-          <select
-            value={filters.corpus}
-            onChange={(e) => setFilters({...filters, corpus: e.target.value})}
-            className="toolbar-filter-select"
-          >
-            <option value="">Все корпуса</option>
-            {uniqueCorpuses.map(corpus => (
-              <option key={corpus} value={corpus}>{corpus}</option>
-            ))}
-          </select>
-          <select
-            value={filters.section}
-            onChange={(e) => setFilters({...filters, section: e.target.value})}
-            className="toolbar-filter-select"
-          >
-            <option value="">Все секции</option>
-            {uniqueSections.map(section => (
-              <option key={section} value={section}>{section}</option>
-            ))}
-          </select>
-          <select
-            value={filters.floor}
-            onChange={(e) => setFilters({...filters, floor: e.target.value})}
-            className="toolbar-filter-select"
-          >
-            <option value="">Все этажи</option>
-            {uniqueFloors.map(floor => (
-              <option key={floor} value={floor.toString()}>{floor} эт.</option>
-            ))}
-          </select>
+          <div className="filter-group">
+            <label className="filter-label">Корпус:</label>
+            <select
+              value={filters.corpus}
+              onChange={(e) => setFilters({...filters, corpus: e.target.value})}
+              className="toolbar-filter-select"
+            >
+              <option value="">Все корпуса</option>
+              {uniqueCorpuses.map(corpus => (
+                <option key={corpus} value={corpus}>{corpus}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label className="filter-label">Секция:</label>
+            <select
+              value={filters.section}
+              onChange={(e) => setFilters({...filters, section: e.target.value})}
+              className="toolbar-filter-select"
+            >
+              <option value="">Все секции</option>
+              {uniqueSections.map(section => (
+                <option key={section} value={section}>{section}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label className="filter-label">Этаж:</label>
+            <select
+              value={filters.floor}
+              onChange={(e) => setFilters({...filters, floor: e.target.value})}
+              className="toolbar-filter-select"
+            >
+              <option value="">Все этажи</option>
+              {uniqueFloors.map(floor => (
+                <option key={floor} value={floor.toString()}>{floor} эт.</option>
+              ))}
+            </select>
+          </div>
+
           {(filters.corpus || filters.section || filters.floor) && (
-            <button 
+            <button
               className="clear-filters-toolbar-btn"
               onClick={() => setFilters({name: '', corpus: '', section: '', floor: ''})}
               title="Очистить фильтры"
@@ -806,7 +992,8 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
         {currentPlan && (
           <>
             {/* Import Actions Dropdown */}
-            <div className="dropdown-container">
+            <div className="filter-group">
+              <label className="filter-label">Подложка:</label>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -814,19 +1001,28 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                 onChange={handleFileUpload}
                 style={{ display: 'none' }}
               />
-              <select 
+              <select
                 className="dropdown-select import-actions"
                 onChange={(e) => {
                   const action = e.target.value
-                  if (action === 'import') fileInputRef.current?.click()
-                  else if (action === 'delete') removeBackground()
-                  e.target.value = '' // Reset selection
+                  console.log('Action selected:', action)
+
+                  if (action === 'import') {
+                    console.log('Trying to click file input:', fileInputRef.current)
+                    if (fileInputRef.current) {
+                      fileInputRef.current.click()
+                    }
+                  } else if (action === 'delete') {
+                    removeBackground()
+                  }
+
+                  // Reset selection immediately
+                  e.target.selectedIndex = 0
                 }}
-                value=""
+                defaultValue=""
               >
-                <option value="" disabled>📄 Подложка</option>
                 <option value="import">📄 Импорт плана этажа</option>
-                {currentPlan.backgroundImage && <option value="delete">❌ Удалить подложку этажа</option>}
+                {currentPlan.backgroundImage && <option value="delete">❌ Удалить подложку</option>}
               </select>
             </div>
 
@@ -849,41 +1045,53 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
               </div>
             )}
 
-            {/* Add Vitrage Button */}
-            <button 
-              className="toolbar-btn primary"
-              onClick={() => setShowVitrageSelector(true)}
-              title="Добавить витраж на план"
-            >
-              🪟 Добавить витраж
-            </button>
+            {/* Add Vitrage Action */}
+            <div className="filter-group">
+              <label className="filter-label">Витражи:</label>
+              <button
+                className="dropdown-select vitrage-add-btn"
+                onClick={() => setShowVitrageSelector(true)}
+                title="Добавить витраж на план"
+              >
+                🪟 Добавить витраж
+              </button>
+            </div>
 
+            {/* Reset Zoom Button */}
+            {(zoomLevel !== 1 || panOffset.x !== 0 || panOffset.y !== 0) && (
+              <div className="filter-group">
+                <label className="filter-label">Масштаб:</label>
+                <button
+                  className="dropdown-select zoom-reset-btn"
+                  onClick={resetZoom}
+                  title="Сбросить масштаб (100%)"
+                >
+                  🎯 Сброс
+                </button>
+              </div>
+            )}
 
           </>
+        )}
+
+        {/* Save Status Indicator - moved to the far right */}
+        {currentPlan && (
+          <div className="save-status-container">
+            {saveStatus === 'saving' && (
+              <span className="save-status saving">💾 Сохраняется...</span>
+            )}
+            {saveStatus === 'unsaved' && (
+              <span className="save-status unsaved">⚠️ Не сохранено</span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="save-status saved">✅ Сохранено</span>
+            )}
+          </div>
         )}
       </div>
 
       <div className="editor-content">
         <div className="editor-sidebar">
-          <div className="sidebar-section">
-            <h3>Сохраненные планы</h3>
-            
-            <div className="plans-list">
-              {filteredPlans.map(plan => (
-                <div 
-                  key={plan.id} 
-                  className={`plan-item ${currentPlan?.id === plan.id ? 'active' : ''}`}
-                  onClick={() => loadPlan(plan)}
-                >
-                  <div className="plan-name">{plan.name}</div>
-                  <div className="plan-details">
-                    {plan.corpus || plan.buildingName || 'Корпус не указан'} / {plan.section || 'Секция не указана'} - Этаж {plan.floor}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {currentPlan && (
             <>
               <div className="sidebar-section">
@@ -894,9 +1102,31 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                   <div>Секция: {currentPlan.section || 'Не указана'}</div>
                   <div>Этаж: {currentPlan.floor}</div>
                   <div>Витражей: {currentPlan.placedVitrages.length}</div>
+                  <div style={{fontSize: '11px', color: '#000000', marginTop: '4px'}}>
+                    Обновлен: {new Date(currentPlan.updatedAt).toLocaleDateString('ru-RU')}
+                  </div>
+                </div>
+
+                <div className="plan-management-actions" style={{marginTop: '12px', display: 'flex', gap: '8px'}}>
+                  <button
+                    className="plan-action-btn duplicate"
+                    onClick={() => openDuplicatePlanDialog(currentPlan)}
+                    title="Дублировать план"
+                    style={{flex: 1, padding: '8px 12px', fontSize: '12px'}}
+                  >
+                    📋 Дублировать
+                  </button>
+                  <button
+                    className="plan-action-btn delete"
+                    onClick={() => deletePlan(currentPlan)}
+                    title="Удалить план"
+                    style={{flex: 1, padding: '8px 12px', fontSize: '12px'}}
+                  >
+                    🗑️ Удалить
+                  </button>
                 </div>
               </div>
-              
+
               {selectedItem && (
                 <div className="sidebar-section">
                   <h3>Информация о витраже</h3>
@@ -909,20 +1139,19 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                           <>
                             <div>Название: {vitrage.name}</div>
                             <div>Размер: {vitrage.totalWidth}×{vitrage.totalHeight}мм</div>
-                            <button 
+                            <button
                               className="secondary"
                               style={{marginTop: '8px', width: '100%'}}
                               onClick={() => {
-                                const updatedVitrages = currentPlan.placedVitrages.map(v => 
-                                  v.id === selectedItem ? {
-                                    ...v,
-                                    rotation: (v.rotation + 90) % 360
-                                  } : v
-                                )
-                                setCurrentPlan({
-                                  ...currentPlan,
-                                  placedVitrages: updatedVitrages
-                                })
+                                updateCurrentPlan(plan => ({
+                                  ...plan,
+                                  placedVitrages: plan.placedVitrages.map(v =>
+                                    v.id === selectedItem ? {
+                                      ...v,
+                                      rotation: (v.rotation + 90) % 360
+                                    } : v
+                                  )
+                                }))
                               }}
                             >
                               Повернуть на 90°
@@ -937,6 +1166,7 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
               )}
             </>
           )}
+
         </div>
 
         <div ref={containerRef} className="canvas-container">
@@ -952,8 +1182,22 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
             />
           ) : (
             <div className="no-plan-message">
-              <h3>Создайте новый план этажа</h3>
-              <p>Нажмите "Новый план" для начала работы</p>
+              {savedPlans.length === 0 ? (
+                <>
+                  <h3>Создайте новый план этажа</h3>
+                  <p>Нажмите "Новый план" для начала работы</p>
+                </>
+              ) : filteredPlans.length === 0 ? (
+                <>
+                  <h3>Планы не найдены</h3>
+                  <p>Измените фильтры или создайте новый план</p>
+                </>
+              ) : (
+                <>
+                  <h3>Выберите план для работы</h3>
+                  <p>Найдено планов: {filteredPlans.length}. Используйте фильтры для выбора нужного плана.</p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1010,6 +1254,84 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                 disabled={!newPlanData.name || !newPlanData.corpus || !newPlanData.section}
               >
                 Создать
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate Plan Dialog */}
+      {showDuplicatePlanDialog && planToDuplicate && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Дублировать план этажа</h3>
+            <p style={{marginBottom: '16px', color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px'}}>
+              Создание копии плана "{planToDuplicate.name}"
+            </p>
+            <div className="form-group">
+              <label>Название плана:</label>
+              <input
+                type="text"
+                value={duplicatePlanData.name}
+                onChange={(e) => setDuplicatePlanData({...duplicatePlanData, name: e.target.value})}
+                placeholder="План 2 этажа"
+              />
+            </div>
+            <div className="form-group">
+              <label>Корпус:</label>
+              <input
+                type="text"
+                value={duplicatePlanData.corpus}
+                onChange={(e) => setDuplicatePlanData({...duplicatePlanData, corpus: e.target.value})}
+                placeholder="Корпус А"
+              />
+            </div>
+            <div className="form-group">
+              <label>Секция:</label>
+              <input
+                type="text"
+                value={duplicatePlanData.section}
+                onChange={(e) => setDuplicatePlanData({...duplicatePlanData, section: e.target.value})}
+                placeholder="Секция 1"
+              />
+            </div>
+            <div className="form-group">
+              <label>Номер этажа:</label>
+              <input
+                type="number"
+                value={duplicatePlanData.floor}
+                onChange={(e) => setDuplicatePlanData({...duplicatePlanData, floor: parseInt(e.target.value)})}
+                min="1"
+              />
+            </div>
+            <div style={{marginTop: '16px', padding: '12px', background: 'rgba(33, 150, 243, 0.1)', borderRadius: '8px', border: '1px solid rgba(33, 150, 243, 0.3)'}}>
+              <div style={{fontSize: '12px', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '8px'}}>
+                <strong>Что будет скопировано:</strong>
+              </div>
+              <div style={{fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)'}}>
+                • Все размещенные витражи ({planToDuplicate.placedVitrages.length} шт.)<br/>
+                • Фоновое изображение плана<br/>
+                • Настройки масштаба и прозрачности<br/>
+                • Стены и комнаты (если есть)
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="secondary"
+                onClick={() => {
+                  setShowDuplicatePlanDialog(false)
+                  setPlanToDuplicate(null)
+                  setDuplicatePlanData({ name: '', corpus: '', section: '', floor: 1 })
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                className="primary"
+                onClick={createDuplicatePlan}
+                disabled={!duplicatePlanData.name || !duplicatePlanData.corpus || !duplicatePlanData.section}
+              >
+                Создать копию
               </button>
             </div>
           </div>
