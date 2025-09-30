@@ -1,6 +1,7 @@
 import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
 import VitrageSpecification from './VitrageSpecification/VitrageSpecification'
 import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
+import FacadePlanEditor from './FacadePlanEditor/FacadePlanEditor'
 import MainPage from './MainPage'
 import './MainContent.css'
 
@@ -55,16 +56,21 @@ export default function MainContent({ activeSection, onSectionChange }: ContentS
       
       case 'facade-plans':
         return (
-          <div className="content-section">
-            <h2>Планы фасадов</h2>
-            <div className="content-card">
-              <p>Работа с фасадными планами и размещением витражных элементов.</p>
-              <div className="feature-list">
-                <div className="feature-item">🏗️ Редактор фасадов</div>
-                <div className="feature-item">📐 Размерные линии</div>
-                <div className="feature-item">🎯 Привязка к конструкциям</div>
-                <div className="feature-item">📋 Спецификации</div>
+          <div className="content-section fullscreen-section">
+            <div className="compact-header">
+              <div className="header-content">
+                <button
+                  className="exit-fullscreen-btn"
+                  onClick={() => onSectionChange?.('vitrage-drawing')}
+                  title="Выйти из полноэкранного режима"
+                >
+                  ✕
+                </button>
+                <h2>Планы фасадов</h2>
               </div>
+            </div>
+            <div className="fullscreen-container">
+              <FacadePlanEditor />
             </div>
           </div>
         )

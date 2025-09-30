@@ -46,15 +46,6 @@ export default function Layout() {
             </>
           )}
         </div>
-        <button 
-          className="sidebar-toggle"
-          onClick={toggleSidebar}
-          title={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
-        >
-          <span className="toggle-icon">
-            {sidebarCollapsed ? '▶' : '◀'}
-          </span>
-        </button>
         <nav className="sidebar-nav">
           {menuItems.map((item) => (
             <button
@@ -69,12 +60,33 @@ export default function Layout() {
               )}
             </button>
           ))}
+
+          <button
+            className="sidebar-toggle-btn"
+            onClick={toggleSidebar}
+            title={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
+          >
+            <span className="toggle-icon">
+              {sidebarCollapsed ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </span>
+            {!sidebarCollapsed && (
+              <span className="toggle-label">Свернуть меню</span>
+            )}
+          </button>
         </nav>
       </aside>
       <main className="main-content">
         <div className="content-area">
-          <MainContent 
-            activeSection={activeMenuItem} 
+          <MainContent
+            activeSection={activeMenuItem}
             onSectionChange={setActiveMenuItem}
           />
         </div>

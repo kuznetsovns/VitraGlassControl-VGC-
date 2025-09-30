@@ -9,7 +9,7 @@ VitraGlassControl is a specialized React + TypeScript + Vite application for man
 ## Development Commands
 
 - **Start development server**: `npm run dev` - Starts Vite dev server with HMR
-- **Build for production**: `npm run build` - TypeScript compilation followed by Vite build  
+- **Build for production**: `npm run build` - TypeScript compilation followed by Vite build
 - **Lint code**: `npm run lint` - Run ESLint on all files
 - **Preview production build**: `npm run preview` - Preview the production build locally
 
@@ -22,7 +22,7 @@ VitraGlassControl is a specialized React + TypeScript + Vite application for man
 - `src/components/GraphicsEditor/` - Complex canvas-based graphics editor for drawing glass panels
 
 ### Key Features
-1. **Sidebar Navigation**: 6 main sections including vitrage drawing, floor plans, facade plans, support, settings, and administration
+1. **Sidebar Navigation**: 7 main sections including vitrage drawing, specification, floor plans, facade plans, support, settings, and administration
 2. **Graphics Editor**: Interactive HTML5 Canvas for drawing and editing glass units with:
    - Drawing tools (select, glass unit creation, profile creation)
    - Real-time property editing
@@ -60,7 +60,7 @@ The project enforces strict TypeScript settings including unused variable detect
 interface VitrageSegment {
   id: string
   row: number, col: number    // Grid position
-  x: number, y: number        // Canvas position  
+  x: number, y: number        // Canvas position
   width: number, height: number // Canvas dimensions
   type: 'glass' | 'ventilation' | 'empty' | 'sandwich' | 'casement' | 'door'
   formula?: string            // Element formula (e.g., "4М1-16-4М1")

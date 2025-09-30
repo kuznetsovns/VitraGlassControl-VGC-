@@ -35,13 +35,13 @@ body {
 
 a {
   font-weight: 500;
-  color: #4a90e2;
+  color: #6b7280;
   text-decoration: inherit;
   transition: color 0.3s ease;
 }
 
 a:hover {
-  color: #357abd;
+  color: #4b5563;
 }
 
 button {
@@ -51,20 +51,20 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #4a90e2;
+  background-color: #6b7280;
   color: white;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 button:hover {
-  background-color: #357abd;
+  background-color: #4b5563;
   transform: translateY(-1px);
 }
 
 button:focus,
 button:focus-visible {
-  outline: 2px solid #4a90e2;
+  outline: 2px solid #6b7280;
   outline-offset: 2px;
 }
 
