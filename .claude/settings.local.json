@@ -17,6 +17,12 @@
       "Bash(npm run lint)",
       "Bash(npm run build:*)",
       "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(git pull:*)",
+      "Bash(npx eslint:*)",
+      "Bash(git log:*)",
+      "Bash(git stash:*)",
       "Bash(npx tsc:*)",
       "Bash(move srctypes.ts srctypes.tsx)"
     ],

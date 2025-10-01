@@ -1017,10 +1017,11 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                   }
 
                   // Reset selection immediately
-                  e.target.selectedIndex = 0
+                  e.target.value = ''
                 }}
-                defaultValue=""
+                value=""
               >
+                <option value="" disabled>📄 Подложка</option>
                 <option value="import">📄 Импорт плана этажа</option>
                 {currentPlan.backgroundImage && <option value="delete">❌ Удалить подложку</option>}
               </select>
