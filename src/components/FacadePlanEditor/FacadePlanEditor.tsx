@@ -85,6 +85,8 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.3)
   const [selectedVitrageForPlacement, setSelectedVitrageForPlacement] = useState<VitrageGrid | null>(null)
   const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -187,11 +189,50 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     }
   }, [currentPlan?.backgroundImage, backgroundImageCache])
 
+  // Auto-save current plan when it changes
+  useEffect(() => {
+    if (!currentPlan || !hasUnsavedChanges) return
+
+    const timer = setTimeout(() => {
+      setSaveStatus('saving')
+      const updatedPlan = { ...currentPlan, updatedAt: new Date() }
+
+      // Use functional update to avoid dependency on savedPlans
+      setSavedPlans(prevPlans => {
+        const existingIndex = prevPlans.findIndex(p => p.id === updatedPlan.id)
+        let newPlans
+        if (existingIndex >= 0) {
+          newPlans = [...prevPlans]
+          newPlans[existingIndex] = updatedPlan
+        } else {
+          newPlans = [...prevPlans, updatedPlan]
+        }
+        localStorage.setItem('facadePlans', JSON.stringify(newPlans))
+        return newPlans
+      })
+
+      setHasUnsavedChanges(false)
+      setSaveStatus('saved')
+    }, 1000) // Auto-save after 1 second of inactivity
+
+    return () => clearTimeout(timer)
+  }, [currentPlan, hasUnsavedChanges])
+
   // Save plans to localStorage
   const savePlansToStorage = useCallback((plans: FacadePlan[]) => {
     localStorage.setItem('facadePlans', JSON.stringify(plans))
     setSavedPlans(plans)
   }, [])
+
+  // Update current plan with auto-save trigger
+  const updateCurrentPlan = useCallback((updater: (plan: FacadePlan) => FacadePlan) => {
+    if (!currentPlan) return
+
+    const newPlan = updater(currentPlan)
+    setCurrentPlan(newPlan)
+    setHasUnsavedChanges(true)
+    setSaveStatus('unsaved')
+  }, [currentPlan])
 
   // Create new facade plan
   const createNewPlan = () => {
@@ -236,6 +277,8 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   // Load plan
   const loadPlan = (plan: FacadePlan) => {
     setCurrentPlan(plan)
+    setHasUnsavedChanges(false)
+    setSaveStatus('saved')
   }
 
   // Get unique values for dropdowns
@@ -684,17 +727,30 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !currentPlan) return
+    console.log('FacadePlanEditor: File selected:', file)
+
+    if (!file || !currentPlan) {
+      console.log('FacadePlanEditor: No file or no current plan')
+      return
+    }
 
     if (file.type === 'application/pdf' || file.type.includes('image')) {
+      console.log('FacadePlanEditor: Valid file type:', file.type)
+
       const reader = new FileReader()
       reader.onload = (event) => {
         const result = event.target?.result as string
-        setCurrentPlan({
-          ...currentPlan,
+        console.log('FacadePlanEditor: File loaded, updating plan with background')
+        updateCurrentPlan(plan => ({
+          ...plan,
           backgroundImage: result,
           backgroundOpacity: backgroundOpacity
-        })
+        }))
+      }
+
+      reader.onerror = () => {
+        console.error('Error reading file')
+        alert('Ошибка при загрузке файла')
       }
 
       if (file.type === 'application/pdf') {
@@ -705,6 +761,8 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
       } else {
         reader.readAsDataURL(file)
       }
+    } else {
+      alert('Поддерживаются только изображения (PNG, JPG, JPEG, GIF, BMP)')
     }
 
     // Reset input
@@ -716,21 +774,21 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   // Remove background
   const removeBackground = () => {
     if (!currentPlan) return
-    setCurrentPlan({
-      ...currentPlan,
+    updateCurrentPlan(plan => ({
+      ...plan,
       backgroundImage: undefined,
       backgroundOpacity: undefined
-    })
+    }))
   }
 
   // Update background opacity
   const updateBackgroundOpacity = (opacity: number) => {
     setBackgroundOpacity(opacity)
     if (currentPlan && currentPlan.backgroundImage) {
-      setCurrentPlan({
-        ...currentPlan,
+      updateCurrentPlan(plan => ({
+        ...plan,
         backgroundOpacity: opacity
-      })
+      }))
     }
   }
 
@@ -738,7 +796,8 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     <div className="facade-plan-editor">
       <div className="editor-toolbar compact-toolbar">
         {/* Plan Actions Dropdown */}
-        <div className="dropdown-container">
+        <div className="filter-group">
+          <label className="filter-label">Фасад:</label>
           <select
             className="dropdown-select plan-actions"
             onChange={(e) => {
@@ -750,7 +809,6 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
             }}
             value=""
           >
-            <option value="" disabled>📋 Фасад</option>
             <option value="open">📂 Открыть фасад</option>
             <option value="new">📋 Новый фасад</option>
             {currentPlan && <option value="save">💾 Сохранить</option>}
@@ -759,36 +817,48 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
 
         {/* Filters */}
         <div className="compact-filters">
-          <select
-            value={filters.corpus}
-            onChange={(e) => setFilters({...filters, corpus: e.target.value})}
-            className="toolbar-filter-select"
-          >
-            <option value="">Все корпуса</option>
-            {uniqueCorpuses.map(corpus => (
-              <option key={corpus} value={corpus}>{corpus}</option>
-            ))}
-          </select>
-          <select
-            value={filters.section}
-            onChange={(e) => setFilters({...filters, section: e.target.value})}
-            className="toolbar-filter-select"
-          >
-            <option value="">Все секции</option>
-            {uniqueSections.map(section => (
-              <option key={section} value={section}>{section}</option>
-            ))}
-          </select>
-          <select
-            value={filters.floor}
-            onChange={(e) => setFilters({...filters, floor: e.target.value})}
-            className="toolbar-filter-select"
-          >
-            <option value="">Все этажи</option>
-            {uniqueFloors.map(floor => (
-              <option key={floor} value={floor.toString()}>{floor} эт.</option>
-            ))}
-          </select>
+          <div className="filter-group">
+            <label className="filter-label">Корпус:</label>
+            <select
+              value={filters.corpus}
+              onChange={(e) => setFilters({...filters, corpus: e.target.value})}
+              className="toolbar-filter-select"
+            >
+              <option value="">Все корпуса</option>
+              {uniqueCorpuses.map(corpus => (
+                <option key={corpus} value={corpus}>{corpus}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label className="filter-label">Секция:</label>
+            <select
+              value={filters.section}
+              onChange={(e) => setFilters({...filters, section: e.target.value})}
+              className="toolbar-filter-select"
+            >
+              <option value="">Все секции</option>
+              {uniqueSections.map(section => (
+                <option key={section} value={section}>{section}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label className="filter-label">Этаж:</label>
+            <select
+              value={filters.floor}
+              onChange={(e) => setFilters({...filters, floor: e.target.value})}
+              className="toolbar-filter-select"
+            >
+              <option value="">Все этажи</option>
+              {uniqueFloors.map(floor => (
+                <option key={floor} value={floor.toString()}>{floor} эт.</option>
+              ))}
+            </select>
+          </div>
+
           {(filters.corpus || filters.section || filters.floor) && (
             <button
               className="clear-filters-toolbar-btn"
@@ -803,7 +873,8 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
         {currentPlan && (
           <>
             {/* Import Actions Dropdown */}
-            <div className="dropdown-container">
+            <div className="filter-group">
+              <label className="filter-label">Подложка:</label>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -815,15 +886,21 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
                 className="dropdown-select import-actions"
                 onChange={(e) => {
                   const action = e.target.value
-                  if (action === 'import') fileInputRef.current?.click()
-                  else if (action === 'delete') removeBackground()
+                  console.log('FacadePlanEditor: Action selected:', action)
+
+                  if (action === 'import') {
+                    console.log('FacadePlanEditor: Trying to click file input:', fileInputRef.current)
+                    fileInputRef.current?.click()
+                  } else if (action === 'delete') {
+                    removeBackground()
+                  }
                   e.target.value = '' // Reset selection
                 }}
                 value=""
               >
                 <option value="" disabled>📄 Подложка</option>
-                <option value="import">📄 Импорт фасада</option>
-                {currentPlan.backgroundImage && <option value="delete">❌ Удалить подложку фасада</option>}
+                <option value="import">📄 Импорт плана фасада</option>
+                {currentPlan.backgroundImage && <option value="delete">❌ Удалить подложку</option>}
               </select>
             </div>
 
