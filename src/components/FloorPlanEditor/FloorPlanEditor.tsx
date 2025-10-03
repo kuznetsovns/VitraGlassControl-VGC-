@@ -402,28 +402,56 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   const handleWheel = (e: React.WheelEvent) => {
     // Only zoom when Shift is pressed
     if (!e.shiftKey) return
-    
-    // Don't prevent default - just handle our zoom logic
+
+    if (!currentPlan) return
+
     const canvas = canvasRef.current
     if (!canvas) return
-    
-    const rect = canvas.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
-    
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoom = Math.max(0.1, Math.min(5, zoomLevel * zoomFactor))
-    
-    // Calculate the point in world coordinates before zoom
-    const worldX = (mouseX - panOffset.x) / zoomLevel
-    const worldY = (mouseY - panOffset.y) / zoomLevel
-    
-    // Calculate new pan offset to keep the same world point under the mouse
-    const newPanX = mouseX - worldX * newZoom
-    const newPanY = mouseY - worldY * newZoom
-    
-    setZoomLevel(newZoom)
-    setPanOffset({x: newPanX, y: newPanY})
+
+    const pos = getMousePos(e)
+
+    // Check if mouse is over a vitrage
+    const hoveredVitrage = currentPlan.placedVitrages.find(v => {
+      const vitrage = savedVitrages.find(sv => sv.id === v.vitrageId)
+      if (!vitrage) return false
+
+      const vitrageWidth = vitrage.totalWidth * 0.1 * v.scale
+      const vitrageHeight = vitrage.totalHeight * 0.1 * v.scale
+
+      // For rotated vitrages, we need to check if mouse is within rotated bounds
+      if (v.rotation === 0) {
+        return pos.x >= v.x && pos.x <= v.x + vitrageWidth &&
+               pos.y >= v.y && pos.y <= v.y + vitrageHeight
+      } else {
+        const rotation = v.rotation
+        const localX = pos.x - v.x
+        const localY = pos.y - v.y
+        const radians = (-rotation * Math.PI) / 180
+        const cosR = Math.cos(radians)
+        const sinR = Math.sin(radians)
+        const originalX = localX * cosR - localY * sinR
+        const originalY = localX * sinR + localY * cosR
+        return originalX >= 0 && originalX <= vitrageWidth &&
+               originalY >= 0 && originalY <= vitrageHeight
+      }
+    })
+
+    if (hoveredVitrage) {
+      // Scale the individual vitrage
+      e.preventDefault()
+      const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
+      const newScale = Math.max(0.1, Math.min(3, hoveredVitrage.scale * scaleFactor))
+
+      updateCurrentPlan(plan => ({
+        ...plan,
+        placedVitrages: plan.placedVitrages.map(v =>
+          v.id === hoveredVitrage.id ? { ...v, scale: newScale } : v
+        )
+      }))
+
+      // Auto-select the vitrage being scaled
+      setSelectedItem(hoveredVitrage.id)
+    }
   }
 
   // Handle mouse events
@@ -664,22 +692,22 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
 
       const displayWidth = vitrage.totalWidth * 0.1
       const displayHeight = vitrage.totalHeight * 0.1
-      
+
       // Draw vitrage background
       ctx.fillStyle = '#fff'
       ctx.fillRect(0, 0, displayWidth, displayHeight)
-      
+
       // Draw vitrage border
-      ctx.strokeStyle = selectedItem === placedVitrage.id ? '#4CAF50' : '#2196F3'
+      ctx.strokeStyle = selectedItem === placedVitrage.id ? '#4CAF50' : '#333'
       ctx.lineWidth = selectedItem === placedVitrage.id ? 3 : 2
       ctx.strokeRect(0, 0, displayWidth, displayHeight)
-      
-      // Draw grid lines to represent segments
+
+      // Draw grid lines for all vitrages
       ctx.strokeStyle = '#999'
       ctx.lineWidth = 1
       const segmentWidth = displayWidth / vitrage.cols
       const segmentHeight = displayHeight / vitrage.rows
-      
+
       // Vertical lines
       for (let col = 1; col < vitrage.cols; col++) {
         ctx.beginPath()
@@ -687,7 +715,7 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
         ctx.lineTo(col * segmentWidth, displayHeight)
         ctx.stroke()
       }
-      
+
       // Horizontal lines
       for (let row = 1; row < vitrage.rows; row++) {
         ctx.beginPath()
@@ -695,26 +723,16 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
         ctx.lineTo(displayWidth, row * segmentHeight)
         ctx.stroke()
       }
-      
+
       // Draw vitrage name
       ctx.fillStyle = '#333'
       ctx.font = 'bold 14px Arial'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(
-        vitrage.name, 
-        displayWidth / 2, 
-        displayHeight / 2
-      )
-      
-      // Draw dimensions
-      ctx.fillStyle = '#666'
-      ctx.font = '10px Arial'
-      ctx.textAlign = 'center'
-      ctx.fillText(
-        `${vitrage.totalWidth}×${vitrage.totalHeight}mm`,
+        vitrage.name,
         displayWidth / 2,
-        displayHeight + 15
+        displayHeight / 2
       )
 
       ctx.restore()
@@ -1135,14 +1153,20 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                     {(() => {
                       const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
                       const vitrage = placedVitrage && savedVitrages.find(v => v.id === placedVitrage.vitrageId)
-                      if (vitrage) {
+                      if (vitrage && placedVitrage) {
                         return (
                           <>
                             <div>Название: {vitrage.name}</div>
                             <div>Размер: {vitrage.totalWidth}×{vitrage.totalHeight}мм</div>
+                            <div style={{marginTop: '8px', fontSize: '13px', color: 'rgba(255, 255, 255, 0.8)'}}>
+                              Масштаб: {Math.round(placedVitrage.scale * 100)}%
+                            </div>
+                            <div style={{marginTop: '8px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', fontStyle: 'italic'}}>
+                              Shift + колесико мыши для масштабирования
+                            </div>
                             <button
                               className="secondary"
-                              style={{marginTop: '8px', width: '100%'}}
+                              style={{marginTop: '12px', width: '100%'}}
                               onClick={() => {
                                 updateCurrentPlan(plan => ({
                                   ...plan,
