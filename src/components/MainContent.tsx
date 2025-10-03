@@ -2,6 +2,7 @@ import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
 import VitrageSpecification from './VitrageSpecification/VitrageSpecification'
 import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
 import FacadePlanEditor from './FacadePlanEditor/FacadePlanEditor'
+import VitrageVisualizer from './VitrageVisualizer/VitrageVisualizer'
 import MainPage from './MainPage'
 import './MainContent.css'
 
@@ -25,7 +26,14 @@ export default function MainContent({ activeSection, onSectionChange }: ContentS
             </div>
           </div>
         )
-      
+
+      case 'vitrage-visualizer':
+        return (
+          <div className="content-section">
+            <VitrageVisualizer />
+          </div>
+        )
+
       case 'specification':
         return (
           <div className="content-section">
