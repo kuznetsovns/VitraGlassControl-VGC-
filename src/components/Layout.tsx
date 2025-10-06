@@ -10,7 +10,8 @@ export interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { id: 'vitrage-visualizer', label: 'Визуализатор Витража', icon: '🎨' },
-  { id: 'specification', label: 'Спецификация витражей', icon: '📋' },
+  { id: 'specification-new', label: 'Спецификация Витражей', icon: '📋' },
+  { id: 'specification', label: 'Спецификация (старая)', icon: '📄' },
   { id: 'floor-plans', label: 'План этажей', icon: '🏢' },
   { id: 'facade-plans', label: 'Планы фасадов', icon: '🏗️' },
   { id: 'support', label: 'Поддержка', icon: '❓' },

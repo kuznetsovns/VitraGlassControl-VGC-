@@ -1,5 +1,6 @@
 import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
 import VitrageSpecification from './VitrageSpecification/VitrageSpecification'
+import VitrageSpecificationNew from './VitrageSpecificationNew/VitrageSpecificationNew'
 import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
 import FacadePlanEditor from './FacadePlanEditor/FacadePlanEditor'
 import VitrageVisualizer from './VitrageVisualizer/VitrageVisualizer'
@@ -31,6 +32,13 @@ export default function MainContent({ activeSection, onSectionChange }: ContentS
         return (
           <div className="content-section">
             <VitrageVisualizer />
+          </div>
+        )
+
+      case 'specification-new':
+        return (
+          <div className="content-section">
+            <VitrageSpecificationNew />
           </div>
         )
 
