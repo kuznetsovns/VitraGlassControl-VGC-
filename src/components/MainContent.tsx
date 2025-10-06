@@ -65,18 +65,6 @@ export default function MainContent({ activeSection, onSectionChange }: ContentS
       case 'facade-plans':
         return (
           <div className="content-section fullscreen-section">
-            <div className="compact-header">
-              <div className="header-content">
-                <button
-                  className="exit-fullscreen-btn"
-                  onClick={() => onSectionChange?.('vitrage-drawing')}
-                  title="Выйти из полноэкранного режима"
-                >
-                  ✕
-                </button>
-                <h2>Планы фасадов</h2>
-              </div>
-            </div>
             <div className="fullscreen-container">
               <FacadePlanEditor />
             </div>

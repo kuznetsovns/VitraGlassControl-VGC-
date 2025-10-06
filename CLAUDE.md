@@ -22,13 +22,14 @@ VitraGlassControl is a specialized React + TypeScript + Vite application for man
 - `src/components/Layout.tsx` - Main application shell with sidebar navigation and content area
 - `src/components/MainContent.tsx` - Content router that renders different sections based on active menu item
 - `src/components/MainPage.tsx` - Landing page with introduction and workflow information
-- `src/components/GraphicsEditor/GraphicsEditor.tsx` - Complex canvas-based graphics editor for drawing glass panels
+- `src/components/VitrageVisualizer/VitrageVisualizer.tsx` - Interactive vitrage creation and segment editing tool
+- `src/components/GraphicsEditor/GraphicsEditor.tsx` - Legacy canvas-based graphics editor (deprecated, use VitrageVisualizer)
 - `src/components/VitrageSpecification/VitrageSpecification.tsx` - Vitrage library and specification management
 - `src/components/FloorPlanEditor/FloorPlanEditor.tsx` - Floor plan editor for placing vitrages on building plans
 
 ### Navigation Sections
 The sidebar provides access to 7 main sections:
-1. **Отрисовка витражей с размерами** - Graphics editor for creating vitrage designs
+1. **Визуализатор Витража** - Interactive vitrage creation and segment editing tool
 2. **Спецификация витражей** - Vitrage specification library and management
 3. **План этажей** - Floor plan editor for placing vitrages on floor plans
 4. **Планы фасадов** - Facade plan editor (placeholder)
@@ -37,23 +38,25 @@ The sidebar provides access to 7 main sections:
 7. **Администрирование** - Administration
 
 ### Key Features
-1. **Sidebar Navigation**: 7 main sections including vitrage drawing, specification, floor plans, facade plans, support, settings, and administration
-2. **Graphics Editor**: Interactive HTML5 Canvas for drawing and editing glass units with:
-   - Grid-based vitrage creation system
-   - Drawing tools (select, glass unit creation, profile creation)
-   - Real-time property editing with click-to-edit dimensions
-   - Drag-and-drop functionality
-   - Segment merging for complex configurations
-   - Visual feedback with grid and dimensions
-2. **Floor Plan Editor**: Canvas-based editor for architectural plans with:
+1. **Sidebar Navigation**: 7 main sections including vitrage visualizer, specification, floor plans, facade plans, support, settings, and administration
+2. **Vitrage Visualizer**: Interactive form-based vitrage creation tool with:
+   - Grid-based vitrage creation by specifying horizontal and vertical segments
+   - Individual segment property editing (type, width, height, formula)
+   - Visual preview with color-coded segment types
+   - Segment selection and modification
+   - Save and manage multiple vitrage configurations
+   - Real-time dimension calculations and total size display
+3. **Floor Plan Editor**: Canvas-based editor for architectural plans with:
    - Import floor plan images as background reference
    - Place vitrages from specification library onto floor plans
-   - Zoom and pan with Shift+scroll wheel
+   - Individual vitrage scaling with Shift + mouse wheel (10% to 300%)
    - Rotate vitrages 90 degrees
+   - Drag and drop vitrages with rotation support
+   - Grid visualization for all vitrages showing segment layout
    - Organize plans by building (corpus), section, and floor
-   - Auto-save functionality
-3. **Multi-language Support**: Russian interface for architectural/construction terminology
-4. **Local Storage Persistence**: All vitrages and floor plans are saved to browser localStorage
+   - Auto-save functionality with unsaved changes indicator
+4. **Multi-language Support**: Russian interface for architectural/construction terminology
+5. **Local Storage Persistence**: All vitrages and floor plans are saved to browser localStorage
 
 ## TypeScript Configuration
 
@@ -146,27 +149,68 @@ interface PlacedVitrage {
   x: number, y: number        // Position on floor plan
   rotation: number            // 0, 90, 180, 270 degrees
   wallId?: string             // Wall this vitrage is attached to (future use)
-  scale: number               // Display scale factor
+  scale: number               // Individual vitrage scale factor (0.1 to 3.0)
 }
 ```
 
-## Working with the Graphics Editor
-- Located in `src/components/GraphicsEditor/GraphicsEditor.tsx`
-- Uses HTML5 Canvas with React refs for drawing operations
-- Grid-based vitrage creation system with configurable rows/columns
-- Interactive segment editing with property panels
-- Supports segment merging for complex glass configurations
-- Real-time dimension editing by clicking on dimension labels
-- Canvas coordinates with proportional sizing based on real millimeter dimensions
-- Profile system with intelligent intersection handling
-- Local storage persistence for saved vitrages
+### Vitrage Visualizer Data Model
+Located in `src/components/VitrageVisualizer/VitrageVisualizer.tsx`
+
+```typescript
+interface Segment {
+  id: string
+  row: number, col: number
+  width: number, height: number        // In millimeters
+  positionX: number, positionY: number // Canvas coordinates
+  fillType: string                     // glass, ventilation, door, etc.
+  formula: string                      // Glass formula (e.g., "4М1-16-4М1")
+  selected: boolean
+}
+
+interface VitrageConfig {
+  marking: string                      // Vitrage name/identifier
+  horizontalSegments: number
+  verticalSegments: number
+  segments: Segment[][]               // 2D array of segments
+  totalWidth: number
+  totalHeight: number
+}
+```
+
+## Working with the Vitrage Visualizer
+- Located in `src/components/VitrageVisualizer/VitrageVisualizer.tsx`
+- Form-based vitrage creation with visual preview
+- Create vitrages by specifying grid dimensions (horizontal × vertical segments)
+- Click segments to select and edit individual properties
+- Real-time position recalculation when segment dimensions change
+- Visual feedback with color-coded segment types
+- Export vitrages to localStorage for use in Floor Plan Editor
 
 ### Key Features
-- **Segment Types**: glass, ventilation, empty, sandwich, casement, door
-- **Merge Functionality**: Combine adjacent segments with span calculations
-- **Dimension System**: Real millimeters converted to proportional canvas coordinates
-- **Interactive Editing**: Click dimensions to edit, click segments for properties
-- **Profile Rendering**: Automatic frame and intersection drawing
+- **Segment Types**: glass (default), ventilation, door, empty, sandwich, casement
+- **Interactive Editing**: Click segments to select, edit width/height/formula in properties panel
+- **Dimension System**: All dimensions in millimeters with automatic total size calculation
+- **Visual Preview**: Canvas rendering with grid lines and color-coded segment types
+- **Position Recalculation**: Automatic repositioning of all segments when dimensions change
+
+## Working with the Floor Plan Editor
+- Located in `src/components/FloorPlanEditor/FloorPlanEditor.tsx`
+- Uses HTML5 Canvas for rendering floor plans and placed vitrages
+- Import background images (PNG, JPG) as floor plan reference
+- Place vitrages from specification library with drag-and-drop
+- Individual vitrage scaling: Shift + mouse wheel over vitrage (no global canvas zoom)
+- Rotate vitrages 90 degrees with button in properties panel
+- Grid visualization shows segment layout for all vitrages
+- Auto-save with 2-second debounce after changes
+- Filter and organize plans by corpus/section/floor
+
+### Key Interactions
+- **Place Vitrage**: Click "Добавить витраж" → Select from library → Click on plan
+- **Move Vitrage**: Click and drag vitrage to new position
+- **Scale Vitrage**: Hover over vitrage + Shift + mouse wheel (10-300%)
+- **Rotate Vitrage**: Select vitrage → Click "Повернуть на 90°"
+- **Delete Vitrage**: Select vitrage → Press Delete key
+- **Pan Canvas**: Middle mouse button + drag (zoom removed, panning kept for navigation)
 
 ## Environment Configuration
 
@@ -187,9 +231,17 @@ The application uses **browser localStorage** for all data persistence:
 - **No Backend**: Currently no server-side persistence, all data is client-side only
 
 ### Data Sharing Between Components
-- **Graphics Editor** → **Vitrage Specification**: Vitrages created in the graphics editor are saved to localStorage
+- **Vitrage Visualizer** → **Vitrage Specification**: Vitrages created in visualizer are saved to localStorage
+- **Graphics Editor** → **Vitrage Specification**: Legacy editor also saves to same localStorage key (deprecated)
 - **Vitrage Specification** → **Floor Plan Editor**: Floor plan editor loads vitrages from localStorage to place on plans
+- **Floor Plan Editor**: Maintains separate localStorage key for floor plans with references to vitrage IDs
 - Changes to data models may require clearing browser localStorage during development
+
+### Important Notes
+- **Individual Vitrage Scaling**: Each placed vitrage on floor plans has its own `scale` property (0.1 to 3.0)
+- **No Global Canvas Zoom**: Floor plan editor removed global zoom to avoid conflicts with individual vitrage scaling
+- **Rotation Hit Detection**: Special coordinate transformation for detecting clicks on rotated vitrages
+- **Grid Visibility**: All vitrages display segment grid lines at all times for clarity
 
 ## Development Workflow
 

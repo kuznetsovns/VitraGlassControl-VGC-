@@ -53,6 +53,7 @@ export interface FacadePlan {
   scale: number // mm per pixel
   backgroundImage?: string // Base64 image data
   backgroundOpacity?: number
+  backgroundScale?: number // Background image scale factor
   createdAt: Date
   updatedAt: Date
   // Legacy field for backward compatibility
@@ -234,6 +235,86 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     setSaveStatus('unsaved')
   }, [currentPlan])
 
+  // Add native wheel event listener to prevent passive listener warning
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const handleNativeWheel = (e: WheelEvent) => {
+      if (!e.shiftKey) return
+      if (!currentPlan) return
+
+      e.preventDefault()
+
+      // If vitrage is selected, scale it instead of background
+      if (selectedItem) {
+        const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
+
+        updateCurrentPlan(plan => ({
+          ...plan,
+          placedVitrages: plan.placedVitrages.map(v =>
+            v.id === selectedItem ? {
+              ...v,
+              scale: Math.max(0.1, Math.min(5, v.scale * scaleFactor))
+            } : v
+          )
+        }))
+
+        return
+      }
+
+      // Otherwise, scale background
+      if (!currentPlan.backgroundImage) return
+
+      const rect = canvas.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+
+      const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
+      const currentScale = currentPlan.backgroundScale || 1.0
+      const newScale = Math.max(0.1, Math.min(3, currentScale * scaleFactor))
+
+      const scaleDelta = newScale - currentScale
+
+      const img = backgroundImageCache[currentPlan.backgroundImage]
+      if (!img) return
+
+      const imgAspectRatio = img.width / img.height
+      const canvasAspectRatio = canvasDimensions.width / canvasDimensions.height
+
+      let oldDrawWidth, oldDrawHeight
+      if (imgAspectRatio > canvasAspectRatio) {
+        oldDrawWidth = canvasDimensions.width * currentScale
+        oldDrawHeight = (canvasDimensions.width / imgAspectRatio) * currentScale
+      } else {
+        oldDrawHeight = canvasDimensions.height * currentScale
+        oldDrawWidth = (canvasDimensions.height * imgAspectRatio) * currentScale
+      }
+
+      const oldImageCenterX = (canvasDimensions.width - oldDrawWidth) / 2 + oldDrawWidth / 2
+      const oldImageCenterY = (canvasDimensions.height - oldDrawHeight) / 2 + oldDrawHeight / 2
+
+      const mouseToImageCenterX = (mouseX - panOffset.x) / zoomLevel - oldImageCenterX
+      const mouseToImageCenterY = (mouseY - panOffset.y) / zoomLevel - oldImageCenterY
+
+      const offsetDeltaX = mouseToImageCenterX * (scaleDelta / currentScale)
+      const offsetDeltaY = mouseToImageCenterY * (scaleDelta / currentScale)
+
+      setPanOffset(prev => ({
+        x: prev.x - offsetDeltaX * zoomLevel,
+        y: prev.y - offsetDeltaY * zoomLevel
+      }))
+
+      updateBackgroundScale(newScale)
+    }
+
+    canvas.addEventListener('wheel', handleNativeWheel, { passive: false })
+
+    return () => {
+      canvas.removeEventListener('wheel', handleNativeWheel)
+    }
+  }, [currentPlan, selectedItem, backgroundImageCache, canvasDimensions, panOffset, zoomLevel, updateCurrentPlan])
+
   // Create new facade plan
   const createNewPlan = () => {
     const newPlan: FacadePlan = {
@@ -246,6 +327,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
       rooms: [],
       placedVitrages: [],
       scale: 10, // 10mm per pixel
+      backgroundScale: 1.0, // Default scale 100%
       createdAt: new Date(),
       updatedAt: new Date()
     }
@@ -295,7 +377,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     )
   })
 
-  // Get mouse position relative to canvas (accounting for zoom and pan)
+  // Get mouse position relative to canvas (accounting for zoom, pan, and background scale)
   const getMousePos = (e: React.MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return { x: 0, y: 0 }
@@ -304,10 +386,32 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     const rawX = e.clientX - rect.left
     const rawY = e.clientY - rect.top
 
-    // Transform coordinates based on zoom and pan
+    const bgScale = currentPlan?.backgroundScale || 1.0
+
+    // Calculate background offset
+    let bgOffsetX = 0, bgOffsetY = 0
+    if (currentPlan?.backgroundImage && backgroundImageCache[currentPlan.id]) {
+      const img = backgroundImageCache[currentPlan.id]
+      const imgAspectRatio = img.width / img.height
+      const canvasAspectRatio = canvasDimensions.width / canvasDimensions.height
+
+      let drawWidth, drawHeight
+      if (imgAspectRatio > canvasAspectRatio) {
+        drawWidth = canvasDimensions.width * bgScale
+        drawHeight = (canvasDimensions.width / imgAspectRatio) * bgScale
+      } else {
+        drawHeight = canvasDimensions.height * bgScale
+        drawWidth = (canvasDimensions.height * imgAspectRatio) * bgScale
+      }
+
+      bgOffsetX = (canvasDimensions.width - drawWidth) / 2
+      bgOffsetY = (canvasDimensions.height - drawHeight) / 2
+    }
+
+    // Transform coordinates based on zoom, pan, background offset and scale
     return {
-      x: (rawX - panOffset.x) / zoomLevel,
-      y: (rawY - panOffset.y) / zoomLevel
+      x: (((rawX - panOffset.x) / zoomLevel) - bgOffsetX) / bgScale,
+      y: (((rawY - panOffset.y) / zoomLevel) - bgOffsetY) / bgScale
     }
   }
 
@@ -315,34 +419,6 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   const resetZoom = () => {
     setZoomLevel(1)
     setPanOffset({x: 0, y: 0})
-  }
-
-  // Handle wheel zoom (only with Shift key) - React event version
-  const handleWheel = (e: React.WheelEvent) => {
-    // Only zoom when Shift is pressed
-    if (!e.shiftKey) return
-
-    // Don't prevent default - just handle our zoom logic
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const rect = canvas.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
-
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoom = Math.max(0.1, Math.min(5, zoomLevel * zoomFactor))
-
-    // Calculate the point in world coordinates before zoom
-    const worldX = (mouseX - panOffset.x) / zoomLevel
-    const worldY = (mouseY - panOffset.y) / zoomLevel
-
-    // Calculate new pan offset to keep the same world point under the mouse
-    const newPanX = mouseX - worldX * newZoom
-    const newPanY = mouseY - worldY * newZoom
-
-    setZoomLevel(newZoom)
-    setPanOffset({x: newPanX, y: newPanY})
   }
 
   // Handle mouse events
@@ -358,6 +434,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
 
     // Handle middle mouse button for panning
     if (e.button === 1) {
+      e.preventDefault()
       setIsPanning(true)
       setPanStart(rawPos)
       return
@@ -507,45 +584,69 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
         ctx.save()
         ctx.globalAlpha = currentPlan?.backgroundOpacity || backgroundOpacity
 
-        // Calculate world space dimensions
-        const worldWidth = canvasDimensions.width / zoomLevel
-        const worldHeight = canvasDimensions.height / zoomLevel
-        const worldX = -panOffset.x / zoomLevel
-        const worldY = -panOffset.y / zoomLevel
+        // Get background scale factor (default 1.0)
+        const bgScale = currentPlan?.backgroundScale || 1.0
 
-        // Calculate scaling to fit image properly
+        // Calculate image dimensions based on canvas size
         const imgAspectRatio = img.width / img.height
-        const worldAspectRatio = worldWidth / worldHeight
+        const canvasAspectRatio = canvasDimensions.width / canvasDimensions.height
 
-        let drawWidth, drawHeight, offsetX, offsetY
+        let drawWidth, drawHeight
 
-        if (imgAspectRatio > worldAspectRatio) {
+        if (imgAspectRatio > canvasAspectRatio) {
           // Image is wider - fit width
-          drawWidth = worldWidth
-          drawHeight = worldWidth / imgAspectRatio
-          offsetX = worldX
-          offsetY = worldY + (worldHeight - drawHeight) / 2
+          drawWidth = canvasDimensions.width * bgScale
+          drawHeight = (canvasDimensions.width / imgAspectRatio) * bgScale
         } else {
           // Image is taller - fit height
-          drawHeight = worldHeight
-          drawWidth = worldHeight * imgAspectRatio
-          offsetX = worldX + (worldWidth - drawWidth) / 2
-          offsetY = worldY
+          drawHeight = canvasDimensions.height * bgScale
+          drawWidth = (canvasDimensions.height * imgAspectRatio) * bgScale
         }
+
+        // Center the image at origin (0, 0) - it will move with pan/zoom
+        const offsetX = (canvasDimensions.width - drawWidth) / 2
+        const offsetY = (canvasDimensions.height - drawHeight) / 2
 
         ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
         ctx.restore()
       }
 
     // Draw placed vitrages
+    const bgScale = currentPlan?.backgroundScale || 1.0
+
+    // Calculate background image offset (same as background drawing)
+    let bgOffsetX = 0, bgOffsetY = 0
+    if (currentPlan?.backgroundImage && backgroundImageCache[currentPlan.id]) {
+      const img = backgroundImageCache[currentPlan.id]
+      const imgAspectRatio = img.width / img.height
+      const canvasAspectRatio = canvasDimensions.width / canvasDimensions.height
+
+      let drawWidth, drawHeight
+      if (imgAspectRatio > canvasAspectRatio) {
+        drawWidth = canvasDimensions.width * bgScale
+        drawHeight = (canvasDimensions.width / imgAspectRatio) * bgScale
+      } else {
+        drawHeight = canvasDimensions.height * bgScale
+        drawWidth = (canvasDimensions.height * imgAspectRatio) * bgScale
+      }
+
+      bgOffsetX = (canvasDimensions.width - drawWidth) / 2
+      bgOffsetY = (canvasDimensions.height - drawHeight) / 2
+    }
+
     currentPlan?.placedVitrages.forEach(placedVitrage => {
       const vitrage = savedVitrages.find(v => v.id === placedVitrage.vitrageId)
       if (!vitrage) return
 
       ctx.save()
-      ctx.translate(placedVitrage.x, placedVitrage.y)
+      // Apply same offset as background + scale position
+      ctx.translate(
+        bgOffsetX + placedVitrage.x * bgScale,
+        bgOffsetY + placedVitrage.y * bgScale
+      )
       ctx.rotate((placedVitrage.rotation * Math.PI) / 180)
-      ctx.scale(placedVitrage.scale, placedVitrage.scale)
+      // Combine vitrage scale with background scale
+      ctx.scale(placedVitrage.scale * bgScale, placedVitrage.scale * bgScale)
 
       const displayWidth = vitrage.totalWidth * 0.1
       const displayHeight = vitrage.totalHeight * 0.1
@@ -610,8 +711,12 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
       const vitrage = selectedVitrageForPlacement
 
       ctx.save()
-      ctx.translate(mousePosition.x, mousePosition.y)
-      ctx.scale(0.5, 0.5) // Same scale as placed vitrages
+      // Apply same offset as background
+      ctx.translate(
+        bgOffsetX + mousePosition.x * bgScale,
+        bgOffsetY + mousePosition.y * bgScale
+      )
+      ctx.scale(0.5 * bgScale, 0.5 * bgScale) // Same scale as placed vitrages with background scale
 
       const displayWidth = vitrage.totalWidth * 0.1
       const displayHeight = vitrage.totalHeight * 0.1
@@ -792,31 +897,41 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     }
   }
 
+  // Update background scale
+  const updateBackgroundScale = (scale: number) => {
+    if (currentPlan && currentPlan.backgroundImage) {
+      updateCurrentPlan(plan => ({
+        ...plan,
+        backgroundScale: scale
+      }))
+    }
+  }
+
   return (
     <div className="facade-plan-editor">
       <div className="editor-toolbar compact-toolbar">
-        {/* Plan Actions Dropdown */}
-        <div className="filter-group">
-          <label className="filter-label">Фасад:</label>
-          <select
-            className="dropdown-select plan-actions"
-            onChange={(e) => {
-              const action = e.target.value
-              if (action === 'open') setShowPlanSelector(true)
-              else if (action === 'new') setShowNewPlanDialog(true)
-              else if (action === 'save' && currentPlan) saveCurrentPlan()
-              e.target.value = '' // Reset selection
-            }}
-            value=""
-          >
-            <option value="open">📂 Открыть фасад</option>
-            <option value="new">📋 Новый фасад</option>
-            {currentPlan && <option value="save">💾 Сохранить</option>}
-          </select>
-        </div>
+        {/* Plan Actions Dropdown with Filters */}
+        <div className="tool-group">
+          <div className="filter-group">
+            <label className="filter-label">Фасад:</label>
+            <select
+              className="dropdown-select plan-actions"
+              onChange={(e) => {
+                const action = e.target.value
+                if (action === 'open') setShowPlanSelector(true)
+                else if (action === 'new') setShowNewPlanDialog(true)
+                else if (action === 'save' && currentPlan) saveCurrentPlan()
+                e.target.value = '' // Reset selection
+              }}
+              value=""
+            >
+              <option value="open">📂 Открыть фасад</option>
+              <option value="new">📋 Новый фасад</option>
+              {currentPlan && <option value="save">💾 Сохранить</option>}
+            </select>
+          </div>
 
-        {/* Filters */}
-        <div className="compact-filters">
+          {/* Filters */}
           <div className="filter-group">
             <label className="filter-label">Корпус:</label>
             <select
@@ -976,11 +1091,12 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
                     {(() => {
                       const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
                       const vitrage = placedVitrage && savedVitrages.find(v => v.id === placedVitrage.vitrageId)
-                      if (vitrage) {
+                      if (vitrage && placedVitrage) {
                         return (
                           <>
                             <div>Название: {vitrage.name}</div>
                             <div>Размер: {vitrage.totalWidth}×{vitrage.totalHeight}мм</div>
+                            <div>Масштаб: {(placedVitrage.scale * 100).toFixed(0)}%</div>
                             <button
                               className="secondary"
                               style={{marginTop: '8px', width: '100%'}}
@@ -1020,7 +1136,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
-              onWheel={handleWheel}
+              style={{ cursor: isPanning ? 'grabbing' : 'default' }}
             />
           ) : (
             <div className="no-plan-message">
