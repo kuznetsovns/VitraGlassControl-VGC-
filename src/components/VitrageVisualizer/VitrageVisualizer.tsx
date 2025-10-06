@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import './VitrageVisualizer.css';
 
 // Интерфейсы для структур данных
@@ -22,6 +22,19 @@ interface VitrageConfig {
   segments: Segment[][];
   totalWidth: number;
   totalHeight: number;
+}
+
+interface ObjectVersion {
+  id: string;
+  name: string;
+  createdAt: Date;
+}
+
+interface ProjectObject {
+  id: string;
+  name: string;
+  versions: ObjectVersion[];
+  createdAt: Date;
 }
 
 // Функция полного пересчета позиций всех сегментов
@@ -64,6 +77,21 @@ function recalculateAllPositions(segments: Segment[][], rows: number, cols: numb
 }
 
 export default function VitrageVisualizer() {
+  // Загрузка объектов из localStorage
+  const loadObjects = (): ProjectObject[] => {
+    const saved = localStorage.getItem('project-objects');
+    return saved ? JSON.parse(saved) : [];
+  };
+
+  const [objects, setObjects] = useState<ProjectObject[]>(loadObjects());
+  const [selectedObject, setSelectedObject] = useState('');
+  const [selectedVersion, setSelectedVersion] = useState('');
+  const [showObjectModal, setShowObjectModal] = useState(false);
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
+  const [newObjectName, setNewObjectName] = useState('');
+  const [newVersionName, setNewVersionName] = useState('');
   const [vitrageName, setVitrageName] = useState('');
   const [horizontalSegments, setHorizontalSegments] = useState('');
   const [verticalSegments, setVerticalSegments] = useState('');
@@ -115,10 +143,98 @@ export default function VitrageVisualizer() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Refs для навигации в панели свойств
+  const typeRef = useRef<HTMLSelectElement>(null);
+  const labelRef = useRef<HTMLInputElement>(null);
   const formulaRef = useRef<HTMLInputElement>(null);
   const widthRef = useRef<HTMLInputElement>(null);
   const heightRef = useRef<HTMLInputElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Сохранение объектов в localStorage
+  useEffect(() => {
+    localStorage.setItem('project-objects', JSON.stringify(objects));
+  }, [objects]);
+
+  // Автофокус на первом поле при открытии панели свойств
+  useEffect(() => {
+    if (selectedSegment !== null) {
+      typeRef.current?.focus();
+    }
+  }, [selectedSegment]);
+
+  // Функции управления объектами
+  const handleAddObject = () => {
+    if (!newObjectName.trim()) {
+      alert('Введите название объекта');
+      return;
+    }
+
+    const newObject: ProjectObject = {
+      id: Date.now().toString(),
+      name: newObjectName,
+      versions: [{
+        id: Date.now().toString(),
+        name: 'Версия 1.0',
+        createdAt: new Date()
+      }],
+      createdAt: new Date()
+    };
+
+    setObjects([...objects, newObject]);
+    setNewObjectName('');
+    setShowObjectModal(false);
+    setSelectedObject(newObject.id);
+    setSelectedVersion(newObject.versions[0].id);
+  };
+
+  const handleEditObject = () => {
+    if (!newObjectName.trim() || !editingObjectId) {
+      alert('Введите название объекта');
+      return;
+    }
+
+    setObjects(objects.map(obj =>
+      obj.id === editingObjectId
+        ? { ...obj, name: newObjectName }
+        : obj
+    ));
+
+    setNewObjectName('');
+    setEditingObjectId(null);
+    setShowEditModal(false);
+  };
+
+  const handleAddVersion = () => {
+    if (!newVersionName.trim() || !selectedObject) {
+      alert('Введите название версии');
+      return;
+    }
+
+    const newVersion: ObjectVersion = {
+      id: Date.now().toString(),
+      name: newVersionName,
+      createdAt: new Date()
+    };
+
+    setObjects(objects.map(obj =>
+      obj.id === selectedObject
+        ? { ...obj, versions: [...obj.versions, newVersion] }
+        : obj
+    ));
+
+    setNewVersionName('');
+    setShowVersionModal(false);
+    setSelectedVersion(newVersion.id);
+  };
+
+  const openEditModal = (objectId: string) => {
+    const obj = objects.find(o => o.id === objectId);
+    if (obj) {
+      setEditingObjectId(objectId);
+      setNewObjectName(obj.name);
+      setShowEditModal(true);
+    }
+  };
 
   const handleVitrageNameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -180,67 +296,166 @@ export default function VitrageVisualizer() {
     setPan({ x: 0, y: 0 });
   };
 
-  const handleSaveVitrage = () => {
-    if (!createdVitrage) return;
+  const generateVitrageSVG = (): string => {
+    if (!createdVitrage) return '';
 
     const cols = createdVitrage.horizontal;
     const rows = createdVitrage.vertical;
+    const baseSegmentWidth = 600 / cols;
+    const baseSegmentHeight = 400 / rows;
 
-    // Преобразуем данные из визуализатора в формат спецификации
-    const segments = [];
+    // Рассчитываем размеры
+    const columnWidths: number[] = [];
+    for (let col = 0; col < cols; col++) {
+      let maxWidth = baseSegmentWidth;
+      for (let row = 0; row < rows; row++) {
+        const segmentId = row * cols + col + 1;
+        const properties = segmentProperties[segmentId];
+        if (properties?.width) {
+          const customWidth = parseFloat(properties.width) / 5;
+          maxWidth = Math.max(maxWidth, customWidth);
+        }
+      }
+      columnWidths.push(maxWidth);
+    }
+
+    const rowHeights: number[] = [];
+    for (let row = 0; row < rows; row++) {
+      let maxHeight = baseSegmentHeight;
+      for (let col = 0; col < cols; col++) {
+        const segmentId = row * cols + col + 1;
+        const properties = segmentProperties[segmentId];
+        if (properties?.height) {
+          const customHeight = parseFloat(properties.height) / 5;
+          maxHeight = Math.max(maxHeight, customHeight);
+        }
+      }
+      rowHeights.push(maxHeight);
+    }
+
+    const totalWidth = columnWidths.reduce((sum, w) => sum + w, 0);
+    const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+    const padding = 50;
+    const viewBoxWidth = totalWidth + padding * 2;
+    const viewBoxHeight = totalHeight + padding * 2;
+
+    // Генерируем SVG
+    let svgContent = `<svg width="${viewBoxWidth}" height="${viewBoxHeight}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}" xmlns="http://www.w3.org/2000/svg">`;
+
+    // Внешняя рамка
+    svgContent += `<rect x="${padding}" y="${padding}" width="${totalWidth}" height="${totalHeight}" fill="none" stroke="#2c3e50" stroke-width="4"/>`;
+
+    // Сегменты
+    const cumulativeX: number[] = [padding];
+    for (let col = 0; col < cols; col++) {
+      cumulativeX.push(cumulativeX[col] + columnWidths[col]);
+    }
+
+    const cumulativeY: number[] = [padding];
+    for (let row = 0; row < rows; row++) {
+      cumulativeY.push(cumulativeY[row] + rowHeights[row]);
+    }
+
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const segmentId = row * cols + col + 1;
         const properties = segmentProperties[segmentId];
+        const segmentWidth = columnWidths[col];
+        const segmentHeight = rowHeights[row];
+        const x = cumulativeX[col];
+        const y = cumulativeY[row];
 
-        // Мапим типы из визуализатора в типы спецификации
-        let segmentType: 'glass' | 'ventilation' | 'empty' | 'sandwich' | 'casement' | 'door' = 'glass';
-        if (properties?.type === 'Стемалит') segmentType = 'glass';
-        else if (properties?.type === 'Вент решётка') segmentType = 'ventilation';
-        else if (properties?.type === 'Створка') segmentType = 'casement';
-        else if (properties?.type === 'Дверной блок') segmentType = 'door';
-        else if (properties?.type === 'Пустой') segmentType = 'empty';
-        else if (properties?.type === 'Сэндвич-панель') segmentType = 'sandwich';
+        let fillColor = "rgba(211, 211, 211, 0.2)";
+        if (properties?.type === 'Стеклопакет') fillColor = "rgba(135, 206, 235, 0.2)";
+        else if (properties?.type === 'Стемалит') fillColor = "rgba(147, 112, 219, 0.2)";
+        else if (properties?.type === 'Вент решётка') fillColor = "rgba(144, 238, 144, 0.2)";
+        else if (properties?.type === 'Створка') fillColor = "rgba(255, 192, 203, 0.2)";
+        else if (properties?.type === 'Дверной блок') fillColor = "rgba(139, 69, 19, 0.2)";
+        else if (properties?.type === 'Сэндвич-панель') fillColor = "rgba(255, 228, 181, 0.2)";
 
-        segments.push({
-          id: `${row}-${col}`,
-          row: row,
-          col: col,
-          x: 0, // позиции будут пересчитаны при отрисовке
-          y: 0,
-          width: properties?.width ? parseFloat(properties.width) / 5 : 600 / cols, // конвертируем из мм в px
-          height: properties?.height ? parseFloat(properties.height) / 5 : 400 / rows,
-          type: segmentType,
-          formula: properties?.formula || undefined,
-          label: `${segmentType === 'glass' ? 'СП' : segmentType === 'ventilation' ? 'ВР' : segmentType === 'casement' ? 'СТ' : segmentType === 'door' ? 'ДБ' : 'ПУ'}-${segmentId}`,
-          realWidth: properties?.width ? parseFloat(properties.width) : undefined,
-          realHeight: properties?.height ? parseFloat(properties.height) : undefined,
-          isStemalit: properties?.type === 'Стемалит',
-          selected: false,
-          merged: false
-        });
+        svgContent += `<rect x="${x}" y="${y}" width="${segmentWidth}" height="${segmentHeight}" fill="${fillColor}" stroke="#87ceeb" stroke-width="2"/>`;
+
+        if (properties?.label) {
+          svgContent += `<text x="${x + segmentWidth / 2}" y="${y + segmentHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="#2c3e50" font-weight="600">${properties.label}</text>`;
+        }
       }
     }
 
-    const vitrageData = {
-      id: Date.now().toString(),
-      name: createdVitrage.name,
-      rows: rows,
-      cols: cols,
-      segments: segments,
-      totalWidth: 600,
-      totalHeight: 400,
-      profileWidth: 12,
-      createdAt: new Date()
-    };
+    svgContent += '</svg>';
+    return svgContent;
+  };
 
-    // Сохраняем в localStorage для спецификации
-    const existingVitrages = localStorage.getItem('saved-vitrages');
-    const vitrages = existingVitrages ? JSON.parse(existingVitrages) : [];
-    vitrages.push(vitrageData);
-    localStorage.setItem('saved-vitrages', JSON.stringify(vitrages));
+  const handleSaveVitrage = () => {
+    if (!createdVitrage) {
+      console.error('Витраж не создан');
+      return;
+    }
 
-    alert(`Витраж "${createdVitrage.name}" успешно сохранён!\n\nПараметры:\n- Сетка: ${createdVitrage.horizontal} × ${createdVitrage.vertical}\n- Всего сегментов: ${createdVitrage.horizontal * createdVitrage.vertical}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Спецификация витражей"`);
+    // Проверяем, что выбраны объект и версия
+    if (!selectedObject || !selectedVersion) {
+      alert('Пожалуйста, выберите объект и версию перед сохранением витража');
+      return;
+    }
+
+    try {
+      const cols = createdVitrage.horizontal;
+      const rows = createdVitrage.vertical;
+
+      // Преобразуем данные из визуализатора в формат спецификации
+      const segments = [];
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const segmentId = row * cols + col + 1;
+          const properties = segmentProperties[segmentId];
+
+          segments.push({
+            id: `${row}-${col}`,
+            type: properties?.type || 'Пустой',
+            width: properties?.width ? parseFloat(properties.width) : undefined,
+            height: properties?.height ? parseFloat(properties.height) : undefined,
+            formula: properties?.formula || undefined,
+            label: properties?.label || `${segmentId}`
+          });
+        }
+      }
+
+      // Генерируем SVG отрисовку
+      console.log('Генерация SVG...');
+      const svgDrawing = generateVitrageSVG();
+      console.log('SVG сгенерирован, длина:', svgDrawing.length);
+
+      const vitrageData = {
+        id: Date.now().toString(),
+        name: createdVitrage.name,
+        objectId: selectedObject,
+        versionId: selectedVersion,
+        rows: rows,
+        cols: cols,
+        segments: segments,
+        totalWidth: 600,
+        totalHeight: 400,
+        svgDrawing: svgDrawing, // Сохраняем SVG
+        createdAt: new Date()
+      };
+
+      console.log('Данные витража:', vitrageData);
+
+      // Сохраняем в localStorage для спецификации
+      const existingVitrages = localStorage.getItem('saved-vitrages');
+      const vitrages = existingVitrages ? JSON.parse(existingVitrages) : [];
+      vitrages.push(vitrageData);
+      localStorage.setItem('saved-vitrages', JSON.stringify(vitrages));
+
+      console.log('Витраж сохранён в localStorage');
+
+      const objectName = objects.find(o => o.id === selectedObject)?.name || '';
+      const versionName = objects.find(o => o.id === selectedObject)?.versions.find(v => v.id === selectedVersion)?.name || '';
+
+      alert(`Витраж "${createdVitrage.name}" успешно сохранён!\n\nПараметры:\n- Объект: ${objectName}\n- Версия: ${versionName}\n- Сетка: ${createdVitrage.horizontal} × ${createdVitrage.vertical}\n- Всего сегментов: ${createdVitrage.horizontal * createdVitrage.vertical}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Спецификация Витражей"`);
+    } catch (error) {
+      console.error('Ошибка при сохранении витража:', error);
+      alert('Произошла ошибка при сохранении витража. Проверьте консоль для деталей.');
+    }
   };
 
   const handleSegmentClick = (segmentId: number) => {
@@ -330,6 +545,20 @@ export default function VitrageVisualizer() {
 
   const handleMouseUp = () => {
     setIsDragging(false);
+  };
+
+  const handleTypeKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      labelRef.current?.focus();
+    }
+  };
+
+  const handleLabelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      formulaRef.current?.focus();
+    }
   };
 
   const handleFormulaKeyDown = (e: React.KeyboardEvent) => {
@@ -659,9 +888,11 @@ export default function VitrageVisualizer() {
                     <div className="form-group">
                       <label htmlFor="segment-type">Тип заполнения:</label>
                       <select
+                        ref={typeRef}
                         id="segment-type"
                         value={segmentProperties[selectedSegment]?.type || 'Пустой'}
                         onChange={(e) => handlePropertyChange(selectedSegment, 'type', e.target.value)}
+                        onKeyDown={handleTypeKeyDown}
                         className="property-select"
                       >
                         <option value="Пустой">Пустой</option>
@@ -676,10 +907,12 @@ export default function VitrageVisualizer() {
                     <div className="form-group">
                       <label htmlFor="segment-label">Обозначение сегмента:</label>
                       <input
+                        ref={labelRef}
                         id="segment-label"
                         type="text"
                         value={segmentProperties[selectedSegment]?.label || ''}
                         onChange={(e) => handlePropertyChange(selectedSegment, 'label', e.target.value)}
+                        onKeyDown={handleLabelKeyDown}
                         placeholder="Например: СП-1, В-01"
                         className="property-input"
                       />
@@ -754,7 +987,156 @@ export default function VitrageVisualizer() {
   // Показываем форму конфигурации
   return (
     <div className="vitrage-visualizer">
-      <h2>Визуализатор Витража</h2>
+      <div className="visualizer-header">
+        <h2>Визуализатор Витража</h2>
+        <div className="header-selectors">
+          <div className="selector-group">
+            <label htmlFor="object-select">Объект:</label>
+            <div className="select-with-buttons">
+              <select
+                id="object-select"
+                value={selectedObject}
+                onChange={(e) => {
+                  setSelectedObject(e.target.value);
+                  setSelectedVersion('');
+                }}
+                className="header-select"
+              >
+                <option value="">Выберите объект</option>
+                {objects.map(obj => (
+                  <option key={obj.id} value={obj.id}>{obj.name}</option>
+                ))}
+              </select>
+              <button
+                className="action-icon-btn"
+                onClick={() => setShowObjectModal(true)}
+                title="Добавить объект"
+              >
+                +
+              </button>
+              {selectedObject && (
+                <button
+                  className="action-icon-btn edit-btn"
+                  onClick={() => openEditModal(selectedObject)}
+                  title="Редактировать объект"
+                >
+                  ✎
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="selector-group">
+            <label htmlFor="version-select">Версия:</label>
+            <div className="select-with-buttons">
+              <select
+                id="version-select"
+                value={selectedVersion}
+                onChange={(e) => setSelectedVersion(e.target.value)}
+                className="header-select"
+                disabled={!selectedObject}
+              >
+                <option value="">Выберите версию</option>
+                {selectedObject && objects.find(obj => obj.id === selectedObject)?.versions.map(ver => (
+                  <option key={ver.id} value={ver.id}>{ver.name}</option>
+                ))}
+              </select>
+              <button
+                className="action-icon-btn"
+                onClick={() => setShowVersionModal(true)}
+                disabled={!selectedObject}
+                title="Добавить версию"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Модальное окно добавления объекта */}
+      {showObjectModal && (
+        <div className="modal-overlay" onClick={() => setShowObjectModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Добавить объект</h3>
+            <input
+              type="text"
+              value={newObjectName}
+              onChange={(e) => setNewObjectName(e.target.value)}
+              placeholder="Название объекта"
+              className="modal-input"
+              autoFocus
+            />
+            <div className="modal-buttons">
+              <button className="modal-btn cancel-btn" onClick={() => {
+                setShowObjectModal(false);
+                setNewObjectName('');
+              }}>
+                Отмена
+              </button>
+              <button className="modal-btn confirm-btn" onClick={handleAddObject}>
+                Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно редактирования объекта */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Редактировать объект</h3>
+            <input
+              type="text"
+              value={newObjectName}
+              onChange={(e) => setNewObjectName(e.target.value)}
+              placeholder="Название объекта"
+              className="modal-input"
+              autoFocus
+            />
+            <div className="modal-buttons">
+              <button className="modal-btn cancel-btn" onClick={() => {
+                setShowEditModal(false);
+                setNewObjectName('');
+                setEditingObjectId(null);
+              }}>
+                Отмена
+              </button>
+              <button className="modal-btn confirm-btn" onClick={handleEditObject}>
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно добавления версии */}
+      {showVersionModal && (
+        <div className="modal-overlay" onClick={() => setShowVersionModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Добавить версию</h3>
+            <input
+              type="text"
+              value={newVersionName}
+              onChange={(e) => setNewVersionName(e.target.value)}
+              placeholder="Название версии"
+              className="modal-input"
+              autoFocus
+            />
+            <div className="modal-buttons">
+              <button className="modal-btn cancel-btn" onClick={() => {
+                setShowVersionModal(false);
+                setNewVersionName('');
+              }}>
+                Отмена
+              </button>
+              <button className="modal-btn confirm-btn" onClick={handleAddVersion}>
+                Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="config-panel">
         <h3>Конфигурация витража</h3>

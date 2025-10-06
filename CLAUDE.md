@@ -22,38 +22,47 @@ VitraGlassControl is a specialized React + TypeScript + Vite application for man
 - `src/components/Layout.tsx` - Main application shell with sidebar navigation and content area
 - `src/components/MainContent.tsx` - Content router that renders different sections based on active menu item
 - `src/components/MainPage.tsx` - Landing page with introduction and workflow information
-- `src/components/GraphicsEditor/GraphicsEditor.tsx` - Complex canvas-based graphics editor for drawing glass panels
+- `src/components/VitrageVisualizer/VitrageVisualizer.tsx` - Interactive vitrage visualizer with segment-by-segment editing
+- `src/components/GraphicsEditor/GraphicsEditor.tsx` - Complex canvas-based graphics editor for drawing glass panels (legacy)
 - `src/components/VitrageSpecification/VitrageSpecification.tsx` - Vitrage library and specification management
 - `src/components/FloorPlanEditor/FloorPlanEditor.tsx` - Floor plan editor for placing vitrages on building plans
+- `src/components/FacadePlanEditor/FacadePlanEditor.tsx` - Facade plan editor for placing vitrages on facade plans
 
 ### Navigation Sections
 The sidebar provides access to 7 main sections:
-1. **Отрисовка витражей с размерами** - Graphics editor for creating vitrage designs
+1. **Визуализатор Витража** - Interactive vitrage visualizer with individual segment editing
 2. **Спецификация витражей** - Vitrage specification library and management
 3. **План этажей** - Floor plan editor for placing vitrages on floor plans
-4. **Планы фасадов** - Facade plan editor (placeholder)
+4. **Планы фасадов** - Facade plan editor for placing vitrages on facade plans
 5. **Поддержка** - Support information
 6. **Настройки** - Settings
 7. **Администрирование** - Administration
 
 ### Key Features
-1. **Sidebar Navigation**: 7 main sections including vitrage drawing, specification, floor plans, facade plans, support, settings, and administration
-2. **Graphics Editor**: Interactive HTML5 Canvas for drawing and editing glass units with:
+1. **Vitrage Visualizer**: Interactive segment-by-segment vitrage editor with:
+   - Grid-based creation with configurable rows and columns
+   - Individual segment property editing (width, height, type, formula)
+   - Real-time position recalculation based on segment dimensions
+   - Visual canvas rendering with segment selection
+   - Save/load functionality for vitrage configurations
+
+2. **Graphics Editor (Legacy)**: Canvas-based drawing tool with:
    - Grid-based vitrage creation system
    - Drawing tools (select, glass unit creation, profile creation)
-   - Real-time property editing with click-to-edit dimensions
-   - Drag-and-drop functionality
+   - Click-to-edit dimensions and properties
    - Segment merging for complex configurations
-   - Visual feedback with grid and dimensions
-2. **Floor Plan Editor**: Canvas-based editor for architectural plans with:
-   - Import floor plan images as background reference
-   - Place vitrages from specification library onto floor plans
+   - Profile rendering with intelligent intersections
+
+3. **Floor Plan & Facade Plan Editors**: Canvas-based architectural plan editors with:
+   - Import background images as reference
+   - Place vitrages from specification library
    - Zoom and pan with Shift+scroll wheel
    - Rotate vitrages 90 degrees
-   - Organize plans by building (corpus), section, and floor
-   - Auto-save functionality
-3. **Multi-language Support**: Russian interface for architectural/construction terminology
-4. **Local Storage Persistence**: All vitrages and floor plans are saved to browser localStorage
+   - Organize by building (corpus), section, and floor
+   - Auto-save to localStorage
+
+4. **Multi-language Support**: Russian interface for architectural/construction terminology
+5. **Local Storage Persistence**: All vitrages and plans saved to browser localStorage
 
 ## TypeScript Configuration
 
@@ -137,7 +146,7 @@ interface FloorPlan {
 ```
 
 ### PlacedVitrage Interface
-Located in `src/components/FloorPlanEditor/FloorPlanEditor.tsx`
+Located in `src/components/FloorPlanEditor/FloorPlanEditor.tsx` and `src/components/FacadePlanEditor/FacadePlanEditor.tsx`
 
 ```typescript
 interface PlacedVitrage {
@@ -147,6 +156,27 @@ interface PlacedVitrage {
   rotation: number            // 0, 90, 180, 270 degrees
   wallId?: string             // Wall this vitrage is attached to (future use)
   scale: number               // Display scale factor
+}
+```
+
+### FacadePlan Interface
+Located in `src/components/FacadePlanEditor/FacadePlanEditor.tsx`
+
+```typescript
+interface FacadePlan {
+  id: string
+  name: string
+  corpus: string              // Building name/number
+  section: string             // Building section
+  floor: number               // Floor number
+  walls: Wall[]               // Wall definitions
+  rooms: Room[]               // Room definitions (future use)
+  placedVitrages: PlacedVitrage[] // Vitrages placed on facade plan
+  scale: number               // mm per pixel
+  backgroundImage?: string    // Base64 image data
+  backgroundOpacity?: number
+  createdAt: Date
+  updatedAt: Date
 }
 ```
 
@@ -184,12 +214,19 @@ The project uses environment variables stored in `.env`:
 The application uses **browser localStorage** for all data persistence:
 - **Vitrages**: Stored under key `'saved-vitrages'` as JSON array of VitrageGrid objects
 - **Floor Plans**: Stored under key `'floorPlans'` as JSON array of FloorPlan objects
+- **Facade Plans**: Stored under key `'facadePlans'` as JSON array of FacadePlan objects
 - **No Backend**: Currently no server-side persistence, all data is client-side only
 
 ### Data Sharing Between Components
-- **Graphics Editor** → **Vitrage Specification**: Vitrages created in the graphics editor are saved to localStorage
-- **Vitrage Specification** → **Floor Plan Editor**: Floor plan editor loads vitrages from localStorage to place on plans
+- **Vitrage Visualizer/Graphics Editor** → **Vitrage Specification**: Created vitrages saved to localStorage
+- **Vitrage Specification** → **Floor/Facade Plan Editors**: Plan editors load vitrages from localStorage for placement
 - Changes to data models may require clearing browser localStorage during development
+
+### Important Note on Data Models
+There are currently two separate vitrage creation systems:
+1. **VitrageVisualizer**: Uses segment-based model with position recalculation
+2. **GraphicsEditor**: Uses canvas-based model with merged segments
+Both save to the same localStorage key but have different internal structures
 
 ## Development Workflow
 
@@ -198,3 +235,11 @@ When making changes to the application:
 2. Start the development server with `npm run dev` to test changes
 3. Build the project with `npm run build` to verify production compatibility
 4. If modifying data models, test with fresh localStorage or provide migration logic
+
+## Important Instructions
+
+- **File Operations**: ALWAYS prefer editing existing files over creating new ones. This is a mature codebase with established patterns.
+- **Component Duplication**: Be aware of the VitrageVisualizer vs GraphicsEditor distinction. VitrageVisualizer is the newer approach.
+- **Data Persistence**: Remember all data is localStorage-based. Consider data migration when changing interfaces.
+- **Russian UI**: Maintain Russian language for all user-facing text and architectural terminology.
+- **Canvas Work**: Both editors use HTML5 Canvas with different rendering approaches - study existing code before modifications.
