@@ -8,7 +8,10 @@ export interface MenuItem {
   icon?: string
 }
 
-const menuItems: MenuItem[] = [
+export type Department = 'УОК' | 'Снабжение' | 'Гарантия' | null
+
+// Меню для отдела УОК
+const uokMenuItems: MenuItem[] = [
   { id: 'vitrage-visualizer', label: 'Визуализатор Витража', icon: '🎨' },
   { id: 'specification-new', label: 'Спецификация Витражей', icon: '📋' },
   { id: 'floor-plans', label: 'План этажей', icon: '🏢' },
@@ -18,76 +21,135 @@ const menuItems: MenuItem[] = [
   { id: 'admin', label: 'Администрирование', icon: '👥' }
 ]
 
+// Меню для отдела снабжения
+const supplyMenuItems: MenuItem[] = [
+  { id: 'order-form', label: 'Оформление заказа', icon: '📝' },
+  { id: 'support', label: 'Поддержка', icon: '❓' },
+  { id: 'settings', label: 'Настройки', icon: '⚙️' }
+]
+
+// Меню для гарантийного отдела
+const warrantyMenuItems: MenuItem[] = [
+  { id: 'order-form', label: 'Оформление заказа', icon: '📝' },
+  { id: 'support', label: 'Поддержка', icon: '❓' },
+  { id: 'settings', label: 'Настройки', icon: '⚙️' }
+]
+
 export default function Layout() {
   const [activeMenuItem, setActiveMenuItem] = useState('main')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false) // Start expanded
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true) // Start collapsed
+  const [currentDepartment, setCurrentDepartment] = useState<Department>(null)
+  const [selectedObject, setSelectedObject] = useState<{id: string, name: string} | null>(null)
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
   const handleLogoClick = () => {
+    // Возврат на главную - сброс всех выборов
     setActiveMenuItem('main')
+    setCurrentDepartment(null)
+    setSelectedObject(null)
+    setSidebarCollapsed(true)
   }
 
+  // Функция для выбора отдела и объекта
+  const handleDepartmentSelect = (department: Department, objectId: string, objectName: string) => {
+    setCurrentDepartment(department)
+    setSelectedObject({ id: objectId, name: objectName })
+    setSidebarCollapsed(false)
+    // Устанавливаем первый пункт меню активным
+    if (department === 'УОК') {
+      setActiveMenuItem('vitrage-visualizer')
+    } else {
+      setActiveMenuItem('order-form')
+    }
+  }
+
+  // Получаем текущее меню в зависимости от отдела
+  const getCurrentMenuItems = (): MenuItem[] => {
+    switch (currentDepartment) {
+      case 'УОК':
+        return uokMenuItems
+      case 'Снабжение':
+        return supplyMenuItems
+      case 'Гарантия':
+        return warrantyMenuItems
+      default:
+        return []
+    }
+  }
+
+  const menuItems = getCurrentMenuItems()
+  const showSidebar = currentDepartment !== null
+
   return (
-    <div className={`layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="sidebar-header">
-          <div className="logo-container">
-            <div className="logo" onClick={handleLogoClick}>
-              <span className="logo-text">VGC</span>
+    <div className={`layout ${sidebarCollapsed || !showSidebar ? 'sidebar-collapsed' : ''}`}>
+      {showSidebar && (
+        <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+          <div className="sidebar-header">
+            <div className="logo-container">
+              <div className="logo" onClick={handleLogoClick}>
+                <span className="logo-text">VGC</span>
+              </div>
             </div>
+            {!sidebarCollapsed && (
+              <>
+                <h1 className="sidebar-title">VitraGlassControl</h1>
+                <div className="sidebar-subtitle">
+                  {selectedObject?.name}
+                  <br />
+                  <small style={{fontSize: '11px', opacity: 0.8}}>
+                    Отдел: {currentDepartment}
+                  </small>
+                </div>
+              </>
+            )}
           </div>
-          {!sidebarCollapsed && (
-            <>
-              <h1 className="sidebar-title">VitraGlassControl</h1>
-              <div className="sidebar-subtitle">Учет витражей со стеклопакетами</div>
-            </>
-          )}
-        </div>
-        <nav className="sidebar-nav">
-          {menuItems.map((item) => (
+          <nav className="sidebar-nav">
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                className={`menu-item ${activeMenuItem === item.id ? 'active' : ''}`}
+                onClick={() => setActiveMenuItem(item.id)}
+                title={sidebarCollapsed ? item.label : ''}
+              >
+                <span className="menu-icon">{item.icon}</span>
+                {!sidebarCollapsed && (
+                  <span className="menu-label">{item.label}</span>
+                )}
+              </button>
+            ))}
+
             <button
-              key={item.id}
-              className={`menu-item ${activeMenuItem === item.id ? 'active' : ''}`}
-              onClick={() => setActiveMenuItem(item.id)}
-              title={sidebarCollapsed ? item.label : ''}
+              className="sidebar-toggle-btn"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
             >
-              <span className="menu-icon">{item.icon}</span>
+              <span className="toggle-icon">
+                {sidebarCollapsed ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
               {!sidebarCollapsed && (
-                <span className="menu-label">{item.label}</span>
+                <span className="toggle-label">Свернуть меню</span>
               )}
             </button>
-          ))}
-
-          <button
-            className="sidebar-toggle-btn"
-            onClick={toggleSidebar}
-            title={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
-          >
-            <span className="toggle-icon">
-              {sidebarCollapsed ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </span>
-            {!sidebarCollapsed && (
-              <span className="toggle-label">Свернуть меню</span>
-            )}
-          </button>
-        </nav>
-      </aside>
+          </nav>
+        </aside>
+      )}
       <main className="main-content">
         <div className="content-area">
           <MainContent
             activeSection={activeMenuItem}
             onSectionChange={setActiveMenuItem}
+            onDepartmentSelect={handleDepartmentSelect}
           />
         </div>
       </main>

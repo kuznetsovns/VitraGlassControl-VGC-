@@ -5,18 +5,35 @@ import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
 import FacadePlanEditor from './FacadePlanEditor/FacadePlanEditor'
 import VitrageVisualizer from './VitrageVisualizer/VitrageVisualizer'
 import MainPage from './MainPage'
+import type { Department } from './Layout'
 import './MainContent.css'
 
 export interface ContentSectionProps {
   activeSection: string
   onSectionChange?: (section: string) => void
+  onDepartmentSelect?: (department: Department, objectId: string, objectName: string) => void
 }
 
-export default function MainContent({ activeSection, onSectionChange }: ContentSectionProps) {
+export default function MainContent({ activeSection, onSectionChange, onDepartmentSelect }: ContentSectionProps) {
   const renderContent = () => {
     switch (activeSection) {
       case 'main':
-        return <MainPage />
+        return <MainPage onDepartmentSelect={onDepartmentSelect} />
+
+      case 'order-form':
+        return (
+          <div className="content-section">
+            <h2>Оформление заказа</h2>
+            <div className="content-card">
+              <p>Форма оформления заказа</p>
+              <div className="feature-list">
+                <div className="feature-item">📝 Создание нового заказа</div>
+                <div className="feature-item">📋 Список заказов</div>
+                <div className="feature-item">🔍 Поиск по заказам</div>
+              </div>
+            </div>
+          </div>
+        )
         
       case 'vitrage-drawing':
         return (
