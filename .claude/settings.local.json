@@ -33,7 +33,9 @@
       "Bash(del /S /Q srccomponentsVitrageVisualizer)",
       "Bash(del /S /Q srctypes)",
       "Bash(git config:*)",
-      "Bash(start http://localhost:5176)"
+      "Bash(start http://localhost:5176)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

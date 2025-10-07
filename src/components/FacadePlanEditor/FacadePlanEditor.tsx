@@ -83,6 +83,9 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   const [showNewPlanDialog, setShowNewPlanDialog] = useState(false)
   const [showVitrageSelector, setShowVitrageSelector] = useState(false)
   const [showPlanSelector, setShowPlanSelector] = useState(false)
+  const [showBackgroundScaleDialog, setShowBackgroundScaleDialog] = useState(false)
+  const [tempBackgroundImage, setTempBackgroundImage] = useState<string | null>(null)
+  const [tempBackgroundScale, setTempBackgroundScale] = useState(1.0)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.3)
   const [selectedVitrageForPlacement, setSelectedVitrageForPlacement] = useState<VitrageGrid | null>(null)
   const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null)
@@ -235,77 +238,34 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     setSaveStatus('unsaved')
   }, [currentPlan])
 
-  // Add native wheel event listener to prevent passive listener warning
+  // Add native wheel event listener for vitrage scaling only
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !currentPlan) return
 
     const handleNativeWheel = (e: WheelEvent) => {
       if (!e.shiftKey) return
-      if (!currentPlan) return
 
       e.preventDefault()
 
-      // If vitrage is selected, scale it instead of background
+      // Only scale selected vitrage
       if (selectedItem) {
         const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
 
-        updateCurrentPlan(plan => ({
-          ...plan,
-          placedVitrages: plan.placedVitrages.map(v =>
-            v.id === selectedItem ? {
-              ...v,
-              scale: Math.max(0.1, Math.min(5, v.scale * scaleFactor))
-            } : v
-          )
-        }))
+        const updatedVitrages = currentPlan.placedVitrages.map(v =>
+          v.id === selectedItem ? {
+            ...v,
+            scale: Math.max(0.1, Math.min(5, v.scale * scaleFactor))
+          } : v
+        )
 
-        return
+        setCurrentPlan({
+          ...currentPlan,
+          placedVitrages: updatedVitrages
+        })
+        setHasUnsavedChanges(true)
+        setSaveStatus('unsaved')
       }
-
-      // Otherwise, scale background
-      if (!currentPlan.backgroundImage) return
-
-      const rect = canvas.getBoundingClientRect()
-      const mouseX = e.clientX - rect.left
-      const mouseY = e.clientY - rect.top
-
-      const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
-      const currentScale = currentPlan.backgroundScale || 1.0
-      const newScale = Math.max(0.1, Math.min(3, currentScale * scaleFactor))
-
-      const scaleDelta = newScale - currentScale
-
-      const img = backgroundImageCache[currentPlan.backgroundImage]
-      if (!img) return
-
-      const imgAspectRatio = img.width / img.height
-      const canvasAspectRatio = canvasDimensions.width / canvasDimensions.height
-
-      let oldDrawWidth, oldDrawHeight
-      if (imgAspectRatio > canvasAspectRatio) {
-        oldDrawWidth = canvasDimensions.width * currentScale
-        oldDrawHeight = (canvasDimensions.width / imgAspectRatio) * currentScale
-      } else {
-        oldDrawHeight = canvasDimensions.height * currentScale
-        oldDrawWidth = (canvasDimensions.height * imgAspectRatio) * currentScale
-      }
-
-      const oldImageCenterX = (canvasDimensions.width - oldDrawWidth) / 2 + oldDrawWidth / 2
-      const oldImageCenterY = (canvasDimensions.height - oldDrawHeight) / 2 + oldDrawHeight / 2
-
-      const mouseToImageCenterX = (mouseX - panOffset.x) / zoomLevel - oldImageCenterX
-      const mouseToImageCenterY = (mouseY - panOffset.y) / zoomLevel - oldImageCenterY
-
-      const offsetDeltaX = mouseToImageCenterX * (scaleDelta / currentScale)
-      const offsetDeltaY = mouseToImageCenterY * (scaleDelta / currentScale)
-
-      setPanOffset(prev => ({
-        x: prev.x - offsetDeltaX * zoomLevel,
-        y: prev.y - offsetDeltaY * zoomLevel
-      }))
-
-      updateBackgroundScale(newScale)
     }
 
     canvas.addEventListener('wheel', handleNativeWheel, { passive: false })
@@ -313,7 +273,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     return () => {
       canvas.removeEventListener('wheel', handleNativeWheel)
     }
-  }, [currentPlan, selectedItem, backgroundImageCache, canvasDimensions, panOffset, zoomLevel, updateCurrentPlan])
+  }, [currentPlan, selectedItem])
 
   // Create new facade plan
   const createNewPlan = () => {
@@ -693,16 +653,6 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
         displayHeight / 2
       )
 
-      // Draw dimensions
-      ctx.fillStyle = '#666'
-      ctx.font = '10px Arial'
-      ctx.textAlign = 'center'
-      ctx.fillText(
-        `${vitrage.totalWidth}×${vitrage.totalHeight}mm`,
-        displayWidth / 2,
-        displayHeight + 15
-      )
-
       ctx.restore()
     })
 
@@ -839,18 +789,16 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
       return
     }
 
-    if (file.type === 'application/pdf' || file.type.includes('image')) {
-      console.log('FacadePlanEditor: Valid file type:', file.type)
+    if (file.type.includes('image')) {
+      console.log('FacadePlanEditor: Image file selected')
 
       const reader = new FileReader()
       reader.onload = (event) => {
         const result = event.target?.result as string
-        console.log('FacadePlanEditor: File loaded, updating plan with background')
-        updateCurrentPlan(plan => ({
-          ...plan,
-          backgroundImage: result,
-          backgroundOpacity: backgroundOpacity
-        }))
+        console.log('FacadePlanEditor: Image loaded, opening scale dialog')
+        setTempBackgroundImage(result)
+        setTempBackgroundScale(1.0)
+        setShowBackgroundScaleDialog(true)
       }
 
       reader.onerror = () => {
@@ -858,14 +806,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
         alert('Ошибка при загрузке файла')
       }
 
-      if (file.type === 'application/pdf') {
-        // For PDF files, we'll convert first page to image
-        // Note: In production, you'd want to use a library like pdf.js
-        alert('PDF файлы будут поддержаны в следующей версии. Пожалуйста, используйте изображения (PNG, JPG).')
-        return
-      } else {
-        reader.readAsDataURL(file)
-      }
+      reader.readAsDataURL(file)
     } else {
       alert('Поддерживаются только изображения (PNG, JPG, JPEG, GIF, BMP)')
     }
@@ -874,6 +815,28 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
+  }
+
+  // Apply background with scale
+  const applyBackgroundWithScale = () => {
+    if (!tempBackgroundImage || !currentPlan) return
+
+    updateCurrentPlan(plan => ({
+      ...plan,
+      backgroundImage: tempBackgroundImage,
+      backgroundOpacity: backgroundOpacity,
+      backgroundScale: tempBackgroundScale
+    }))
+
+    setShowBackgroundScaleDialog(false)
+    setTempBackgroundImage(null)
+  }
+
+  // Cancel background upload
+  const cancelBackgroundUpload = () => {
+    setShowBackgroundScaleDialog(false)
+    setTempBackgroundImage(null)
+    setTempBackgroundScale(1.0)
   }
 
   // Remove background
@@ -993,7 +956,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,.pdf"
+                accept="image/*"
                 onChange={handleFileUpload}
                 style={{ display: 'none' }}
               />
@@ -1096,7 +1059,6 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
                           <>
                             <div>Название: {vitrage.name}</div>
                             <div>Размер: {vitrage.totalWidth}×{vitrage.totalHeight}мм</div>
-                            <div>Масштаб: {(placedVitrage.scale * 100).toFixed(0)}%</div>
                             <button
                               className="secondary"
                               style={{marginTop: '8px', width: '100%'}}
@@ -1334,6 +1296,69 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
             <div className="modal-actions">
               <button className="secondary" onClick={() => setShowVitrageSelector(false)}>
                 Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Background Scale Dialog */}
+      {showBackgroundScaleDialog && tempBackgroundImage && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Настройка масштаба подложки</h3>
+            <p style={{marginBottom: '16px', fontSize: '14px', color: '#666'}}>
+              Выберите масштаб для фонового изображения. После применения масштаб будет зафиксирован.
+            </p>
+
+            <div style={{marginBottom: '20px'}}>
+              <div style={{
+                width: '100%',
+                height: '400px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                position: 'relative',
+                background: '#f5f5f5'
+              }}>
+                <img
+                  src={tempBackgroundImage}
+                  alt="Preview"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    transform: `scale(${tempBackgroundScale})`,
+                    transformOrigin: 'center center',
+                    transition: 'transform 0.2s'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Масштаб: {(tempBackgroundScale * 100).toFixed(0)}%</label>
+              <input
+                type="range"
+                min="0.1"
+                max="3"
+                step="0.1"
+                value={tempBackgroundScale}
+                onChange={(e) => setTempBackgroundScale(parseFloat(e.target.value))}
+                style={{width: '100%'}}
+              />
+              <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#999', marginTop: '4px'}}>
+                <span>10%</span>
+                <span>300%</span>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button className="secondary" onClick={cancelBackgroundUpload}>
+                Отмена
+              </button>
+              <button className="primary" onClick={applyBackgroundWithScale}>
+                Применить
               </button>
             </div>
           </div>
