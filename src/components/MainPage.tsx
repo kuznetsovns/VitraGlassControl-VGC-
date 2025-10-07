@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { supabase } from '../lib/supabase'
 import './MainPage.css'
 
 export interface ProjectObject {
@@ -27,26 +28,40 @@ export default function MainPage({}: MainPageProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load saved objects on mount
+  // Load objects from Supabase on mount
   useEffect(() => {
-    const savedObjects = localStorage.getItem('project-objects')
-    if (savedObjects) {
-      try {
-        const parsed = JSON.parse(savedObjects) as ProjectObject[]
-        setObjects(parsed.map(obj => ({
-          ...obj,
-          createdAt: new Date(obj.createdAt),
-          updatedAt: new Date(obj.updatedAt)
-        })))
-      } catch (error) {
-        console.error('Error loading objects:', error)
-      }
-    }
+    loadObjects()
   }, [])
 
-  // Save objects to localStorage
-  const saveObjectsToStorage = (objects: ProjectObject[]) => {
-    localStorage.setItem('project-objects', JSON.stringify(objects))
+  const loadObjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('objects')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading objects from Supabase:', error)
+        alert('Ошибка загрузки объектов: ' + error.message)
+        return
+      }
+
+      if (data) {
+        const objects = data.map(obj => ({
+          id: obj.id,
+          name: obj.name,
+          customer: obj.customer || '',
+          address: obj.address || '',
+          buildingsCount: obj.corpus_count || 1,
+          image: obj.photo_url || undefined,
+          createdAt: new Date(obj.created_at),
+          updatedAt: new Date(obj.updated_at)
+        }))
+        setObjects(objects)
+      }
+    } catch (error) {
+      console.error('Error loading objects:', error)
+    }
   }
 
   // Handle image upload
@@ -72,44 +87,82 @@ export default function MainPage({}: MainPageProps) {
   }
 
   // Create new object
-  const createObject = () => {
+  const createObject = async () => {
     if (!newObjectData.name || !newObjectData.customer || !newObjectData.address) {
       alert('Пожалуйста, заполните все обязательные поля')
       return
     }
 
-    const newObject: ProjectObject = {
-      id: Date.now().toString(),
-      name: newObjectData.name,
-      customer: newObjectData.customer,
-      address: newObjectData.address,
-      buildingsCount: newObjectData.buildingsCount,
-      image: selectedImage || undefined,
-      createdAt: new Date(),
-      updatedAt: new Date()
+    try {
+      const { data, error } = await supabase
+        .from('objects')
+        .insert({
+          name: newObjectData.name,
+          customer: newObjectData.customer,
+          address: newObjectData.address,
+          corpus_count: newObjectData.buildingsCount,
+          photo_url: selectedImage || null
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error creating object:', error)
+        alert('Ошибка создания объекта: ' + error.message)
+        return
+      }
+
+      if (data) {
+        // Add new object to local state
+        const newObject: ProjectObject = {
+          id: data.id,
+          name: data.name,
+          customer: data.customer || '',
+          address: data.address || '',
+          buildingsCount: data.corpus_count || 1,
+          image: data.photo_url || undefined,
+          createdAt: new Date(data.created_at),
+          updatedAt: new Date(data.updated_at)
+        }
+        setObjects([newObject, ...objects])
+      }
+
+      // Reset form
+      setNewObjectData({
+        name: '',
+        customer: '',
+        address: '',
+        buildingsCount: 1
+      })
+      setSelectedImage(null)
+      setShowCreateDialog(false)
+    } catch (error) {
+      console.error('Error creating object:', error)
+      alert('Ошибка создания объекта')
     }
-
-    const updatedObjects = [...objects, newObject]
-    setObjects(updatedObjects)
-    saveObjectsToStorage(updatedObjects)
-
-    // Reset form
-    setNewObjectData({
-      name: '',
-      customer: '',
-      address: '',
-      buildingsCount: 1
-    })
-    setSelectedImage(null)
-    setShowCreateDialog(false)
   }
 
   // Delete object
-  const deleteObject = (objectId: string) => {
-    if (confirm('Вы уверены, что хотите удалить этот объект?')) {
-      const updatedObjects = objects.filter(obj => obj.id !== objectId)
-      setObjects(updatedObjects)
-      saveObjectsToStorage(updatedObjects)
+  const deleteObject = async (objectId: string) => {
+    if (!confirm('Вы уверены, что хотите удалить этот объект?')) return
+
+    try {
+      const { error } = await supabase
+        .from('objects')
+        .delete()
+        .eq('id', objectId)
+
+      if (error) {
+        console.error('Error deleting object:', error)
+        alert('Ошибка удаления объекта: ' + error.message)
+        return
+      }
+
+      // Remove from local state
+      setObjects(objects.filter(obj => obj.id !== objectId))
+    } catch (error) {
+      console.error('Error deleting object:', error)
+      alert('Ошибка удаления объекта')
     }
   }
 
