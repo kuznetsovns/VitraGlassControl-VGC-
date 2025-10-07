@@ -120,6 +120,9 @@ export default function VitrageVisualizer() {
   // Состояние для выбранного сегмента
   const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
 
+  // Состояние для режима выбора сегментов для объединения
+  const [selectedSegments, setSelectedSegments] = useState<Set<number>>(new Set());
+
   // Свойства сегментов
   const [segmentProperties, setSegmentProperties] = useState<{
     [key: number]: {
@@ -128,6 +131,11 @@ export default function VitrageVisualizer() {
       height: string;
       formula: string;
       label: string;
+      merged?: boolean;
+      rowSpan?: number;
+      colSpan?: number;
+      hidden?: boolean;
+      mergedInto?: number;
     };
   }>({});
 
@@ -304,33 +312,52 @@ export default function VitrageVisualizer() {
     const baseSegmentWidth = 600 / cols;
     const baseSegmentHeight = 400 / rows;
 
-    // Рассчитываем размеры
-    const columnWidths: number[] = [];
-    for (let col = 0; col < cols; col++) {
-      let maxWidth = baseSegmentWidth;
-      for (let row = 0; row < rows; row++) {
-        const segmentId = row * cols + col + 1;
-        const properties = segmentProperties[segmentId];
-        if (properties?.width) {
-          const customWidth = parseFloat(properties.width) / 5;
-          maxWidth = Math.max(maxWidth, customWidth);
-        }
-      }
-      columnWidths.push(maxWidth);
-    }
+    // Инициализируем массивы для ширины и высоты
+    const columnWidths: number[] = new Array(cols).fill(baseSegmentWidth);
+    const rowHeights: number[] = new Array(rows).fill(baseSegmentHeight);
 
-    const rowHeights: number[] = [];
+    // Обрабатываем все сегменты для установки базовых размеров столбцов и строк
     for (let row = 0; row < rows; row++) {
-      let maxHeight = baseSegmentHeight;
       for (let col = 0; col < cols; col++) {
         const segmentId = row * cols + col + 1;
         const properties = segmentProperties[segmentId];
-        if (properties?.height) {
-          const customHeight = parseFloat(properties.height) / 5;
-          maxHeight = Math.max(maxHeight, customHeight);
+
+        // Пропускаем скрытые сегменты
+        if (properties?.hidden) continue;
+
+        // Для обычных сегментов просто берем их размеры
+        if (!properties?.merged) {
+          if (properties?.width) {
+            const customWidth = parseFloat(properties.width) / 5;
+            columnWidths[col] = Math.max(columnWidths[col], customWidth);
+          }
+
+          if (properties?.height) {
+            const customHeight = parseFloat(properties.height) / 5;
+            rowHeights[row] = Math.max(rowHeights[row], customHeight);
+          }
+        } else {
+          // Для объединенных сегментов распределяем их размеры на столбцы/строки
+          const colSpan = properties.colSpan || 1;
+          const rowSpan = properties.rowSpan || 1;
+
+          if (properties.width) {
+            const mergedWidth = parseFloat(properties.width) / 5;
+            const widthPerColumn = mergedWidth / colSpan;
+            for (let c = col; c < col + colSpan && c < cols; c++) {
+              columnWidths[c] = Math.max(columnWidths[c], widthPerColumn);
+            }
+          }
+
+          if (properties.height) {
+            const mergedHeight = parseFloat(properties.height) / 5;
+            const heightPerRow = mergedHeight / rowSpan;
+            for (let r = row; r < row + rowSpan && r < rows; r++) {
+              rowHeights[r] = Math.max(rowHeights[r], heightPerRow);
+            }
+          }
         }
       }
-      rowHeights.push(maxHeight);
     }
 
     const totalWidth = columnWidths.reduce((sum, w) => sum + w, 0);
@@ -360,10 +387,28 @@ export default function VitrageVisualizer() {
       for (let col = 0; col < cols; col++) {
         const segmentId = row * cols + col + 1;
         const properties = segmentProperties[segmentId];
+
+        // Пропускаем скрытые сегменты (объединенные в другой сегмент)
+        if (properties?.hidden) continue;
+
         const segmentWidth = columnWidths[col];
         const segmentHeight = rowHeights[row];
         const x = cumulativeX[col];
         const y = cumulativeY[row];
+
+        // Если сегмент объединенный, рассчитываем его размеры
+        let actualWidth = segmentWidth;
+        let actualHeight = segmentHeight;
+        if (properties?.merged && properties?.rowSpan && properties?.colSpan) {
+          actualWidth = 0;
+          for (let c = col; c < col + properties.colSpan && c < cols; c++) {
+            actualWidth += columnWidths[c];
+          }
+          actualHeight = 0;
+          for (let r = row; r < row + properties.rowSpan && r < rows; r++) {
+            actualHeight += rowHeights[r];
+          }
+        }
 
         let fillColor = "rgba(211, 211, 211, 0.2)";
         if (properties?.type === 'Стеклопакет') fillColor = "rgba(135, 206, 235, 0.2)";
@@ -373,10 +418,10 @@ export default function VitrageVisualizer() {
         else if (properties?.type === 'Дверной блок') fillColor = "rgba(139, 69, 19, 0.2)";
         else if (properties?.type === 'Сэндвич-панель') fillColor = "rgba(255, 228, 181, 0.2)";
 
-        svgContent += `<rect x="${x}" y="${y}" width="${segmentWidth}" height="${segmentHeight}" fill="${fillColor}" stroke="#87ceeb" stroke-width="2"/>`;
+        svgContent += `<rect x="${x}" y="${y}" width="${actualWidth}" height="${actualHeight}" fill="${fillColor}" stroke="#87ceeb" stroke-width="2"/>`;
 
         if (properties?.label) {
-          svgContent += `<text x="${x + segmentWidth / 2}" y="${y + segmentHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="#2c3e50" font-weight="600">${properties.label}</text>`;
+          svgContent += `<text x="${x + actualWidth / 2}" y="${y + actualHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="#2c3e50" font-weight="600">${properties.label}</text>`;
         }
       }
     }
@@ -458,8 +503,24 @@ export default function VitrageVisualizer() {
     }
   };
 
-  const handleSegmentClick = (segmentId: number) => {
-    setSelectedSegment(segmentId === selectedSegment ? null : segmentId);
+  const handleSegmentClick = (segmentId: number, ctrlKey: boolean) => {
+    if (ctrlKey) {
+      // Режим множественного выбора для объединения
+      setSelectedSegments(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(segmentId)) {
+          newSet.delete(segmentId);
+        } else {
+          newSet.add(segmentId);
+        }
+        return newSet;
+      });
+      setSelectedSegment(null); // Отменяем выбор единичного сегмента
+    } else {
+      // Обычный режим редактирования
+      setSelectedSegment(segmentId === selectedSegment ? null : segmentId);
+      setSelectedSegments(new Set()); // Сбрасываем множественный выбор
+    }
   };
 
   const handlePropertyChange = (segmentId: number, property: 'type' | 'width' | 'height' | 'formula' | 'label', value: string) => {
@@ -468,39 +529,83 @@ export default function VitrageVisualizer() {
     const cols = createdVitrage.horizontal;
     const rows = createdVitrage.vertical;
 
-    // Вычисляем позицию текущего сегмента
-    const currentRow = Math.floor((segmentId - 1) / cols);
-    const currentCol = (segmentId - 1) % cols;
-
     setSegmentProperties(prev => {
       const updated = { ...prev };
+      const currentSegmentProps = updated[segmentId];
+      const currentRow = Math.floor((segmentId - 1) / cols);
+      const currentCol = (segmentId - 1) % cols;
 
-      // Для изменения ширины - применяем ко всем сегментам в столбце
+      // Для изменения ширины - применяем ко всему столбцу
       if (property === 'width') {
-        for (let row = 0; row < rows; row++) {
-          const targetSegmentId = row * cols + currentCol + 1;
-          updated[targetSegmentId] = {
-            ...updated[targetSegmentId],
-            type: updated[targetSegmentId]?.type || 'Пустой',
-            width: value,
-            height: updated[targetSegmentId]?.height || '',
-            formula: updated[targetSegmentId]?.formula || '',
-            label: updated[targetSegmentId]?.label || ''
-          };
+        // Если это объединенный сегмент, определяем все столбцы которые он занимает
+        const isMerged = currentSegmentProps?.merged;
+        const colSpan = isMerged ? (currentSegmentProps?.colSpan || 1) : 1;
+
+        // Применяем ширину ко всем затрагиваемым столбцам
+        for (let c = currentCol; c < currentCol + colSpan && c < cols; c++) {
+          for (let row = 0; row < rows; row++) {
+            const targetSegmentId = row * cols + c + 1;
+            // Пропускаем скрытые сегменты
+            if (updated[targetSegmentId]?.hidden) continue;
+
+            // Для необъединенных сегментов просто ставим ширину
+            if (!updated[targetSegmentId]?.merged) {
+              updated[targetSegmentId] = {
+                ...updated[targetSegmentId],
+                type: updated[targetSegmentId]?.type || 'Пустой',
+                width: value,
+                height: updated[targetSegmentId]?.height || '',
+                formula: updated[targetSegmentId]?.formula || '',
+                label: updated[targetSegmentId]?.label || ''
+              };
+            } else {
+              // Для объединенных сегментов пересчитываем суммарную ширину
+              const mergedColSpan = updated[targetSegmentId]?.colSpan || 1;
+              const mergedStartCol = (targetSegmentId - 1) % cols;
+              const totalWidth = parseFloat(value || '0') * mergedColSpan;
+
+              updated[targetSegmentId] = {
+                ...updated[targetSegmentId],
+                width: totalWidth.toString()
+              };
+            }
+          }
         }
       }
-      // Для изменения высоты - применяем ко всем сегментам в строке
+      // Для изменения высоты - применяем ко всей строке
       else if (property === 'height') {
-        for (let col = 0; col < cols; col++) {
-          const targetSegmentId = currentRow * cols + col + 1;
-          updated[targetSegmentId] = {
-            ...updated[targetSegmentId],
-            type: updated[targetSegmentId]?.type || 'Пустой',
-            width: updated[targetSegmentId]?.width || '',
-            height: value,
-            formula: updated[targetSegmentId]?.formula || '',
-            label: updated[targetSegmentId]?.label || ''
-          };
+        // Если это объединенный сегмент, определяем все строки которые он занимает
+        const isMerged = currentSegmentProps?.merged;
+        const rowSpan = isMerged ? (currentSegmentProps?.rowSpan || 1) : 1;
+
+        // Применяем высоту ко всем затрагиваемым строкам
+        for (let r = currentRow; r < currentRow + rowSpan && r < rows; r++) {
+          for (let col = 0; col < cols; col++) {
+            const targetSegmentId = r * cols + col + 1;
+            // Пропускаем скрытые сегменты
+            if (updated[targetSegmentId]?.hidden) continue;
+
+            // Для необъединенных сегментов просто ставим высоту
+            if (!updated[targetSegmentId]?.merged) {
+              updated[targetSegmentId] = {
+                ...updated[targetSegmentId],
+                type: updated[targetSegmentId]?.type || 'Пустой',
+                width: updated[targetSegmentId]?.width || '',
+                height: value,
+                formula: updated[targetSegmentId]?.formula || '',
+                label: updated[targetSegmentId]?.label || ''
+              };
+            } else {
+              // Для объединенных сегментов пересчитываем суммарную высоту
+              const mergedRowSpan = updated[targetSegmentId]?.rowSpan || 1;
+              const totalHeight = parseFloat(value || '0') * mergedRowSpan;
+
+              updated[targetSegmentId] = {
+                ...updated[targetSegmentId],
+                height: totalHeight.toString()
+              };
+            }
+          }
         }
       }
       // Для остальных свойств - применяем только к текущему сегменту
@@ -624,6 +729,161 @@ export default function VitrageVisualizer() {
     setIsPanning(false);
   };
 
+  const handleMergeSegments = () => {
+    if (selectedSegments.size < 2) {
+      alert('Выберите минимум 2 сегмента для объединения.\n\nУдерживайте Ctrl и кликайте на сегменты для выбора.');
+      return;
+    }
+
+    if (!createdVitrage) return;
+
+    const cols = createdVitrage.horizontal;
+    const rows = createdVitrage.vertical;
+
+    // Получаем координаты выбранных сегментов
+    const segmentsArray = Array.from(selectedSegments);
+    const coordinates = segmentsArray.map(id => ({
+      id,
+      row: Math.floor((id - 1) / cols),
+      col: (id - 1) % cols
+    }));
+
+    // Проверяем, что сегменты образуют прямоугольник
+    const minRow = Math.min(...coordinates.map(c => c.row));
+    const maxRow = Math.max(...coordinates.map(c => c.row));
+    const minCol = Math.min(...coordinates.map(c => c.col));
+    const maxCol = Math.max(...coordinates.map(c => c.col));
+
+    const expectedCount = (maxRow - minRow + 1) * (maxCol - minCol + 1);
+    if (selectedSegments.size !== expectedCount) {
+      alert('Выбранные сегменты должны образовывать прямоугольную область.');
+      return;
+    }
+
+    // Проверяем непрерывность
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const id = row * cols + col + 1;
+        if (!selectedSegments.has(id)) {
+          alert('Выбранные сегменты должны быть непрерывными и образовывать прямоугольник.');
+          return;
+        }
+      }
+    }
+
+    // Объединяем сегменты
+    const firstSegmentId = segmentsArray[0];
+    const firstSegmentProps = segmentProperties[firstSegmentId] || {
+      type: 'Пустой',
+      width: '',
+      height: '',
+      formula: '',
+      label: ''
+    };
+
+    // Создаем новые свойства сегментов
+    const newProperties = { ...segmentProperties };
+
+    // Помечаем первый сегмент как объединенный и обновляем его размеры
+    let totalWidth = 0;
+    let totalHeight = 0;
+
+    for (let col = minCol; col <= maxCol; col++) {
+      const segId = minRow * cols + col + 1;
+      const width = parseFloat(newProperties[segId]?.width || '0');
+      totalWidth += width;
+    }
+
+    for (let row = minRow; row <= maxRow; row++) {
+      const segId = row * cols + minCol + 1;
+      const height = parseFloat(newProperties[segId]?.height || '0');
+      totalHeight += height;
+    }
+
+    // Обновляем первый сегмент
+    newProperties[firstSegmentId] = {
+      ...firstSegmentProps,
+      label: firstSegmentProps.label || `М${segmentsArray.length}`,
+      merged: true,
+      rowSpan: maxRow - minRow + 1,
+      colSpan: maxCol - minCol + 1
+    };
+
+    // Помечаем остальные сегменты как скрытые
+    segmentsArray.slice(1).forEach(id => {
+      newProperties[id] = {
+        ...newProperties[id],
+        type: newProperties[id]?.type || 'Пустой',
+        width: newProperties[id]?.width || '',
+        height: newProperties[id]?.height || '',
+        formula: newProperties[id]?.formula || '',
+        label: '',
+        hidden: true,
+        mergedInto: firstSegmentId
+      };
+    });
+
+    setSegmentProperties(newProperties);
+    setSelectedSegments(new Set());
+    alert(`Объединено сегментов: ${selectedSegments.size}`);
+  };
+
+  const handleUnmergeSegments = () => {
+    if (!createdVitrage) return;
+
+    // Находим все объединенные сегменты для разъединения
+    const mergedSegments: number[] = [];
+
+    // Если есть выбранные сегменты для разъединения
+    if (selectedSegments.size > 0) {
+      selectedSegments.forEach(id => {
+        if (segmentProperties[id]?.merged) {
+          mergedSegments.push(id);
+        }
+      });
+    }
+    // Если выбран единичный сегмент
+    else if (selectedSegment && segmentProperties[selectedSegment]?.merged) {
+      mergedSegments.push(selectedSegment);
+    }
+
+    if (mergedSegments.length === 0) {
+      alert('Выберите объединенный сегмент для разъединения.');
+      return;
+    }
+
+    const newProperties = { ...segmentProperties };
+    let totalUnmerged = 0;
+
+    mergedSegments.forEach(mergedId => {
+      const mergedProps = newProperties[mergedId];
+      if (!mergedProps?.merged) return;
+
+      // Находим все скрытые сегменты, которые были объединены в этот
+      Object.keys(newProperties).forEach(key => {
+        const id = parseInt(key);
+        const props = newProperties[id];
+        if (props?.hidden && props?.mergedInto === mergedId) {
+          // Восстанавливаем скрытый сегмент
+          delete newProperties[id].hidden;
+          delete newProperties[id].mergedInto;
+          totalUnmerged++;
+        }
+      });
+
+      // Убираем флаги объединения с главного сегмента
+      delete newProperties[mergedId].merged;
+      delete newProperties[mergedId].rowSpan;
+      delete newProperties[mergedId].colSpan;
+      totalUnmerged++;
+    });
+
+    setSegmentProperties(newProperties);
+    setSelectedSegments(new Set());
+    setSelectedSegment(null);
+    alert(`Разъединено сегментов: ${totalUnmerged}`);
+  };
+
   // Конвертация мм в пиксели (масштаб 1:5)
   const mmToPixels = (mm: string): number => {
     const mmValue = parseFloat(mm);
@@ -647,6 +907,14 @@ export default function VitrageVisualizer() {
             <button className="action-btn save-btn" onClick={handleSaveVitrage} title="Сохранить текущий витраж">
               <span className="btn-icon">💾</span>
               <span className="btn-text">Сохранить витраж</span>
+            </button>
+            <button className="action-btn merge-btn" onClick={handleMergeSegments} title="Объединить выбранные сегменты">
+              <span className="btn-icon">⊞</span>
+              <span className="btn-text">Объединить сегменты</span>
+            </button>
+            <button className="action-btn unmerge-btn" onClick={handleUnmergeSegments} title="Разъединить выбранный сегмент">
+              <span className="btn-icon">⊟</span>
+              <span className="btn-text">Разъединить сегменты</span>
             </button>
 
             <div className="zoom-controls">
@@ -687,34 +955,52 @@ export default function VitrageVisualizer() {
               const baseSegmentWidth = 600 / cols;
               const baseSegmentHeight = 400 / rows;
 
-              // Рассчитываем ширину для каждой колонки
-              const columnWidths: number[] = [];
-              for (let col = 0; col < cols; col++) {
-                let maxWidth = baseSegmentWidth;
-                for (let row = 0; row < rows; row++) {
-                  const segmentId = row * cols + col + 1;
-                  const properties = segmentProperties[segmentId];
-                  if (properties?.width) {
-                    const customWidth = mmToPixels(properties.width);
-                    maxWidth = Math.max(maxWidth, customWidth);
-                  }
-                }
-                columnWidths.push(maxWidth);
-              }
+              // Инициализируем массивы для ширины и высоты
+              const columnWidths: number[] = new Array(cols).fill(baseSegmentWidth);
+              const rowHeights: number[] = new Array(rows).fill(baseSegmentHeight);
 
-              // Рассчитываем высоту для каждой строки
-              const rowHeights: number[] = [];
+              // Обрабатываем все сегменты для установки базовых размеров столбцов и строк
               for (let row = 0; row < rows; row++) {
-                let maxHeight = baseSegmentHeight;
                 for (let col = 0; col < cols; col++) {
                   const segmentId = row * cols + col + 1;
                   const properties = segmentProperties[segmentId];
-                  if (properties?.height) {
-                    const customHeight = mmToPixels(properties.height);
-                    maxHeight = Math.max(maxHeight, customHeight);
+
+                  // Пропускаем скрытые сегменты
+                  if (properties?.hidden) continue;
+
+                  // Для обычных сегментов просто берем их размеры
+                  if (!properties?.merged) {
+                    if (properties?.width) {
+                      const customWidth = mmToPixels(properties.width);
+                      columnWidths[col] = Math.max(columnWidths[col], customWidth);
+                    }
+
+                    if (properties?.height) {
+                      const customHeight = mmToPixels(properties.height);
+                      rowHeights[row] = Math.max(rowHeights[row], customHeight);
+                    }
+                  } else {
+                    // Для объединенных сегментов распределяем их размеры на столбцы/строки
+                    const colSpan = properties.colSpan || 1;
+                    const rowSpan = properties.rowSpan || 1;
+
+                    if (properties.width) {
+                      const mergedWidth = mmToPixels(properties.width);
+                      const widthPerColumn = mergedWidth / colSpan;
+                      for (let c = col; c < col + colSpan && c < cols; c++) {
+                        columnWidths[c] = Math.max(columnWidths[c], widthPerColumn);
+                      }
+                    }
+
+                    if (properties.height) {
+                      const mergedHeight = mmToPixels(properties.height);
+                      const heightPerRow = mergedHeight / rowSpan;
+                      for (let r = row; r < row + rowSpan && r < rows; r++) {
+                        rowHeights[r] = Math.max(rowHeights[r], heightPerRow);
+                      }
+                    }
                   }
                 }
-                rowHeights.push(maxHeight);
               }
 
               const totalWidth = columnWidths.reduce((sum, w) => sum + w, 0);
@@ -774,17 +1060,37 @@ export default function VitrageVisualizer() {
                     const segmentId = row * cols + col + 1;
                     const properties = segmentProperties[segmentId];
 
+                    // Пропускаем скрытые сегменты (объединенные в другой сегмент)
+                    if (properties?.hidden) continue;
+
                     const segmentWidth = columnWidths[col];
                     const segmentHeight = rowHeights[row];
                     const x = cumulativeX[col];
                     const y = cumulativeY[row];
 
                     const isSelected = selectedSegment === segmentId;
+                    const isMultiSelected = selectedSegments.has(segmentId);
+
+                    // Если сегмент объединенный, рассчитываем его размеры
+                    let actualWidth = segmentWidth;
+                    let actualHeight = segmentHeight;
+                    if (properties?.merged && properties?.rowSpan && properties?.colSpan) {
+                      actualWidth = 0;
+                      for (let c = col; c < col + properties.colSpan && c < cols; c++) {
+                        actualWidth += columnWidths[c];
+                      }
+                      actualHeight = 0;
+                      for (let r = row; r < row + properties.rowSpan && r < rows; r++) {
+                        actualHeight += rowHeights[r];
+                      }
+                    }
 
                     // Цвет в зависимости от типа (по умолчанию пустой)
                     let fillColor = "rgba(211, 211, 211, 0.2)"; // Пустой - серый (по умолчанию)
                     if (isSelected) {
                       fillColor = "rgba(74, 144, 226, 0.4)";
+                    } else if (isMultiSelected) {
+                      fillColor = "rgba(255, 165, 0, 0.4)"; // Оранжевый для множественного выбора
                     } else if (properties?.type === 'Стеклопакет') {
                       fillColor = "rgba(135, 206, 235, 0.2)"; // Стеклопакет - голубой
                     } else if (properties?.type === 'Стемалит') {
@@ -805,19 +1111,19 @@ export default function VitrageVisualizer() {
                         <rect
                           x={x}
                           y={y}
-                          width={segmentWidth}
-                          height={segmentHeight}
+                          width={actualWidth}
+                          height={actualHeight}
                           fill={fillColor}
-                          stroke={isSelected ? "#2c3e50" : "#87ceeb"}
-                          strokeWidth={isSelected ? "3" : "2"}
-                          onClick={() => handleSegmentClick(segmentId)}
+                          stroke={isSelected || isMultiSelected ? "#2c3e50" : "#87ceeb"}
+                          strokeWidth={isSelected || isMultiSelected ? "3" : "2"}
+                          onClick={(e) => handleSegmentClick(segmentId, e.ctrlKey)}
                           style={{ cursor: 'pointer' }}
                         />
                         {/* Обозначение сегмента */}
                         {properties?.label && (
                           <text
-                            x={x + segmentWidth / 2}
-                            y={y + segmentHeight / 2}
+                            x={x + actualWidth / 2}
+                            y={y + actualHeight / 2}
                             textAnchor="middle"
                             dominantBaseline="middle"
                             fontSize="16"
@@ -833,36 +1139,92 @@ export default function VitrageVisualizer() {
                   }
                 }
 
+                // Функция для проверки, находятся ли два сегмента в одном объединенном сегменте
+                const areInSameMergedSegment = (segId1: number, segId2: number): boolean => {
+                  const props1 = segmentProperties[segId1];
+                  const props2 = segmentProperties[segId2];
+
+                  // Если оба сегмента скрыты и объединены в один
+                  if (props1?.mergedInto && props2?.mergedInto && props1.mergedInto === props2.mergedInto) {
+                    return true;
+                  }
+
+                  // Если один из сегментов - главный объединенный, а другой в него объединен
+                  if (props1?.merged && props2?.mergedInto === segId1) {
+                    return true;
+                  }
+                  if (props2?.merged && props1?.mergedInto === segId2) {
+                    return true;
+                  }
+
+                  // Если оба сегмента - это один и тот же объединенный сегмент
+                  if (segId1 === segId2 && props1?.merged) {
+                    return true;
+                  }
+
+                  return false;
+                };
+
                 // Рисуем горизонтальные ригели (между рядами)
                 for (let row = 1; row < rows; row++) {
                   const y = cumulativeY[row] - rigelWidth / 2;
-                  rigels.push(
-                    <rect
-                      key={`h-rigel-${row}`}
-                      x={offsetX}
-                      y={y}
-                      width={totalWidth}
-                      height={rigelWidth}
-                      fill="#2c3e50"
-                      opacity="0.8"
-                    />
-                  );
+
+                  // Для каждого ригеля проверяем, нужно ли его рисовать сегментами
+                  for (let col = 0; col < cols; col++) {
+                    const segmentAbove = (row - 1) * cols + col + 1;
+                    const segmentBelow = row * cols + col + 1;
+
+                    // Если сегменты объединены, не рисуем ригель между ними
+                    if (areInSameMergedSegment(segmentAbove, segmentBelow)) {
+                      continue;
+                    }
+
+                    const x = cumulativeX[col];
+                    const width = columnWidths[col];
+
+                    rigels.push(
+                      <rect
+                        key={`h-rigel-${row}-${col}`}
+                        x={x}
+                        y={y}
+                        width={width}
+                        height={rigelWidth}
+                        fill="#2c3e50"
+                        opacity="0.8"
+                      />
+                    );
+                  }
                 }
 
                 // Рисуем вертикальные ригели (между колонками)
                 for (let col = 1; col < cols; col++) {
                   const x = cumulativeX[col] - rigelWidth / 2;
-                  rigels.push(
-                    <rect
-                      key={`v-rigel-${col}`}
-                      x={x}
-                      y={offsetY}
-                      width={rigelWidth}
-                      height={totalHeight}
-                      fill="#2c3e50"
-                      opacity="0.8"
-                    />
-                  );
+
+                  // Для каждого ригеля проверяем, нужно ли его рисовать сегментами
+                  for (let row = 0; row < rows; row++) {
+                    const segmentLeft = row * cols + (col - 1) + 1;
+                    const segmentRight = row * cols + col + 1;
+
+                    // Если сегменты объединены, не рисуем ригель между ними
+                    if (areInSameMergedSegment(segmentLeft, segmentRight)) {
+                      continue;
+                    }
+
+                    const y = cumulativeY[row];
+                    const height = rowHeights[row];
+
+                    rigels.push(
+                      <rect
+                        key={`v-rigel-${row}-${col}`}
+                        x={x}
+                        y={y}
+                        width={rigelWidth}
+                        height={height}
+                        fill="#2c3e50"
+                        opacity="0.8"
+                      />
+                    );
+                  }
                 }
 
                 return [...segments, ...rigels];
