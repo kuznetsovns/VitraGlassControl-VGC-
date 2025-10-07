@@ -1706,15 +1706,15 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
         return (
           <div className="modal-overlay">
             <div className="modal large" style={{maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column'}}>
-              <h3>Настройка ID секций витража: {vitrage.name}</h3>
-              <p style={{marginBottom: '16px', color: '#000000', fontSize: '14px'}}>
+              <h3 style={{color: '#000'}}>Настройка ID секций витража: {vitrage.name}</h3>
+              <p style={{marginBottom: '16px', color: '#000', fontSize: '14px'}}>
                 Кликните на секцию для задания ID. Всего секций: {vitrage.rows} × {vitrage.cols} = {vitrage.rows * vitrage.cols}
               </p>
 
               <div style={{display: 'flex', gap: '20px', flex: 1, overflow: 'hidden'}}>
                 {/* Left: Vitrage visualization */}
                 <div style={{flex: '1', display: 'flex', flexDirection: 'column', minWidth: '400px'}}>
-                  <h4 style={{marginBottom: '12px', fontSize: '14px'}}>Визуализация витража</h4>
+                  <h4 style={{marginBottom: '12px', fontSize: '14px', color: '#000'}}>Визуализация витража</h4>
                   <div style={{
                     flex: 1,
                     border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -1742,7 +1742,7 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                               key={colIndex}
                               onClick={() => selectSegmentForID(segmentId)}
                               style={{
-                                border: isSelected ? '3px solid #4CAF50' : hasID ? '2px solid rgba(76, 175, 80, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                                border: isSelected ? '3px solid #4CAF50' : '2px solid #000',
                                 borderRadius: '4px',
                                 background: isSelected ? 'rgba(76, 175, 80, 0.3)' : hasID ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                                 cursor: 'pointer',
@@ -1761,11 +1761,11 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                                 e.currentTarget.style.background = isSelected ? 'rgba(76, 175, 80, 0.3)' : hasID ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.1)'
                               }}
                             >
-                              <div style={{fontSize: '11px', color: '#fff', fontWeight: 'bold'}}>
+                              <div style={{fontSize: '11px', color: '#000', fontWeight: 'bold'}}>
                                 {rowIndex + 1}-{colIndex + 1}
                               </div>
                               {hasID && (
-                                <div style={{fontSize: '9px', color: 'rgba(76, 175, 80, 0.9)', marginTop: '4px', textAlign: 'center', wordBreak: 'break-all'}}>
+                                <div style={{fontSize: '9px', color: '#000', marginTop: '4px', textAlign: 'center', wordBreak: 'break-all'}}>
                                   ✓ ID
                                 </div>
                               )}
@@ -1781,7 +1781,7 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                 <div style={{flex: '1', display: 'flex', flexDirection: 'column', minWidth: '400px'}}>
                   {selectedSegmentForID ? (
                     <>
-                      <h4 style={{marginBottom: '12px', fontSize: '14px'}}>
+                      <h4 style={{marginBottom: '12px', fontSize: '14px', color: '#000'}}>
                         ID для секции {selectedSegmentForID.split('-')[1]}-{selectedSegmentForID.split('-')[2]}
                       </h4>
 
@@ -1908,10 +1908,10 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                           border: '1px solid rgba(33, 150, 243, 0.3)',
                           marginTop: '16px'
                         }}>
-                          <div style={{fontSize: '11px', color: 'rgba(0, 0, 0, 0.7)', marginBottom: '6px'}}>
+                          <div style={{fontSize: '11px', color: '#000', marginBottom: '6px'}}>
                             Предварительный просмотр ID:
                           </div>
-                          <div style={{fontSize: '13px', color: 'rgba(76, 175, 80, 0.9)', fontWeight: 'bold', wordBreak: 'break-all'}}>
+                          <div style={{fontSize: '13px', color: '#000', fontWeight: 'bold', wordBreak: 'break-all'}}>
                             {generateFullID(vitrageIDData) || '(пусто)'}
                           </div>
                         </div>
@@ -1931,7 +1931,7 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: 'rgba(255, 255, 255, 0.6)',
+                      color: '#000',
                       textAlign: 'center',
                       padding: '40px'
                     }}>
