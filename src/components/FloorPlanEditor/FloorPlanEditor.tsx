@@ -31,6 +31,21 @@ export interface Room {
   area?: number
 }
 
+export interface VitrageID {
+  object: string      // Объект (Зил18, Примавера14)
+  corpus: string      // Корпус
+  section: string     // Секция
+  floor: string       // Этаж
+  apartment: string   // Квартира
+  vitrageNumber: string // Номер витража
+  vitrageName: string   // Название витража
+  vitrageSection: string // Секция витража
+}
+
+export interface SegmentIDMapping {
+  [segmentId: string]: VitrageID // Map segment ID to its custom ID
+}
+
 export interface PlacedVitrage {
   id: string
   vitrageId: string // Reference to VitrageGrid
@@ -39,6 +54,7 @@ export interface PlacedVitrage {
   rotation: number // 0, 90, 180, 270 degrees
   wallId?: string // Wall this vitrage is attached to
   scale: number
+  segmentIDs?: SegmentIDMapping // Custom IDs for each segment
 }
 
 export interface FloorPlan {
@@ -83,12 +99,39 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   const [showDuplicatePlanDialog, setShowDuplicatePlanDialog] = useState(false)
   const [showVitrageSelector, setShowVitrageSelector] = useState(false)
   const [showPlanSelector, setShowPlanSelector] = useState(false)
+  const [showVitrageIDDialog, setShowVitrageIDDialog] = useState(false)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.3)
   const [selectedVitrageForPlacement, setSelectedVitrageForPlacement] = useState<VitrageGrid | null>(null)
   const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [planToDuplicate, setPlanToDuplicate] = useState<FloorPlan | null>(null)
+
+  // Vitrage ID state
+  const [vitrageIDData, setVitrageIDData] = useState<VitrageID>({
+    object: '',
+    corpus: '',
+    section: '',
+    floor: '',
+    apartment: '',
+    vitrageNumber: '',
+    vitrageName: '',
+    vitrageSection: ''
+  })
+  const [selectedSegmentForID, setSelectedSegmentForID] = useState<string | null>(null)
+  const [segmentIDsTemp, setSegmentIDsTemp] = useState<SegmentIDMapping>({})
+
+  // Options for dropdowns (will be populated from existing data)
+  const [idOptions, setIdOptions] = useState({
+    objects: [] as string[],
+    corpuses: [] as string[],
+    sections: [] as string[],
+    floors: [] as string[],
+    apartments: [] as string[],
+    vitrageNumbers: [] as string[],
+    vitrageNames: [] as string[],
+    vitrageSections: [] as string[]
+  })
   
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -146,10 +189,49 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
     if (plans) {
       setSavedPlans(JSON.parse(plans))
     }
-    
+
     // Load vitrages from VitrageSpecification storage
     loadVitragesFromStorage()
   }, [loadVitragesFromStorage])
+
+  // Update ID options from all placed vitrages
+  useEffect(() => {
+    const allVitrages = savedPlans.flatMap(plan => plan.placedVitrages)
+    const objects = new Set<string>()
+    const corpuses = new Set<string>()
+    const sections = new Set<string>()
+    const floors = new Set<string>()
+    const apartments = new Set<string>()
+    const vitrageNumbers = new Set<string>()
+    const vitrageNames = new Set<string>()
+    const vitrageSections = new Set<string>()
+
+    allVitrages.forEach(v => {
+      if (v.segmentIDs) {
+        Object.values(v.segmentIDs).forEach(id => {
+          if (id.object) objects.add(id.object)
+          if (id.corpus) corpuses.add(id.corpus)
+          if (id.section) sections.add(id.section)
+          if (id.floor) floors.add(id.floor)
+          if (id.apartment) apartments.add(id.apartment)
+          if (id.vitrageNumber) vitrageNumbers.add(id.vitrageNumber)
+          if (id.vitrageName) vitrageNames.add(id.vitrageName)
+          if (id.vitrageSection) vitrageSections.add(id.vitrageSection)
+        })
+      }
+    })
+
+    setIdOptions({
+      objects: Array.from(objects).sort(),
+      corpuses: Array.from(corpuses).sort(),
+      sections: Array.from(sections).sort(),
+      floors: Array.from(floors).sort(),
+      apartments: Array.from(apartments).sort(),
+      vitrageNumbers: Array.from(vitrageNumbers).sort(),
+      vitrageNames: Array.from(vitrageNames).sort(),
+      vitrageSections: Array.from(vitrageSections).sort()
+    })
+  }, [savedPlans])
 
   // Auto-resize canvas to fit container
   useEffect(() => {
@@ -927,6 +1009,107 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
     }
   }
 
+  // Open Vitrage ID dialog
+  const openVitrageIDDialog = () => {
+    if (!selectedItem || !currentPlan) return
+
+    const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
+    if (!placedVitrage) return
+
+    // Load existing segment IDs or create new mapping
+    setSegmentIDsTemp(placedVitrage.segmentIDs || {})
+    setSelectedSegmentForID(null)
+    setVitrageIDData({
+      object: '',
+      corpus: '',
+      section: '',
+      floor: '',
+      apartment: '',
+      vitrageNumber: '',
+      vitrageName: '',
+      vitrageSection: ''
+    })
+
+    setShowVitrageIDDialog(true)
+  }
+
+  // Select segment for ID editing
+  const selectSegmentForID = (segmentId: string) => {
+    setSelectedSegmentForID(segmentId)
+
+    // Load existing ID for this segment or empty ID
+    if (segmentIDsTemp[segmentId]) {
+      setVitrageIDData(segmentIDsTemp[segmentId])
+    } else {
+      setVitrageIDData({
+        object: '',
+        corpus: '',
+        section: '',
+        floor: '',
+        apartment: '',
+        vitrageNumber: '',
+        vitrageName: '',
+        vitrageSection: ''
+      })
+    }
+  }
+
+  // Save ID for current segment
+  const saveSegmentID = () => {
+    if (!selectedSegmentForID) return
+
+    setSegmentIDsTemp(prev => ({
+      ...prev,
+      [selectedSegmentForID]: vitrageIDData
+    }))
+
+    // Clear selection after saving
+    setSelectedSegmentForID(null)
+    setVitrageIDData({
+      object: '',
+      corpus: '',
+      section: '',
+      floor: '',
+      apartment: '',
+      vitrageNumber: '',
+      vitrageName: '',
+      vitrageSection: ''
+    })
+  }
+
+  // Save all segment IDs to vitrage
+  const saveAllSegmentIDs = () => {
+    if (!selectedItem || !currentPlan) return
+
+    updateCurrentPlan(plan => ({
+      ...plan,
+      placedVitrages: plan.placedVitrages.map(v =>
+        v.id === selectedItem ? {
+          ...v,
+          segmentIDs: segmentIDsTemp
+        } : v
+      )
+    }))
+
+    setShowVitrageIDDialog(false)
+  }
+
+  // Generate full ID string
+  const generateFullID = (id: VitrageID): string => {
+    const parts = [
+      id.object,
+      id.corpus,
+      id.section,
+      id.floor,
+      id.apartment,
+      id.vitrageNumber,
+      id.vitrageName,
+      id.vitrageSection
+    ].filter(p => p) // Remove empty parts
+
+    return parts.join('-')
+  }
+
   return (
     <div className="floor-plan-editor">
       <div className="editor-toolbar compact-toolbar">
@@ -1161,12 +1344,27 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                             <div style={{marginTop: '8px', fontSize: '13px', color: 'rgba(255, 255, 255, 0.8)'}}>
                               Масштаб: {Math.round(placedVitrage.scale * 100)}%
                             </div>
+                            <div style={{marginTop: '8px', fontSize: '13px', color: 'rgba(255, 255, 255, 0.8)'}}>
+                              Секций: {vitrage.rows} × {vitrage.cols} = {vitrage.rows * vitrage.cols}
+                            </div>
+                            {placedVitrage.segmentIDs && Object.keys(placedVitrage.segmentIDs).length > 0 && (
+                              <div style={{marginTop: '8px', fontSize: '12px', color: 'rgba(76, 175, 80, 0.9)'}}>
+                                ID задан для {Object.keys(placedVitrage.segmentIDs).length} из {vitrage.rows * vitrage.cols} секций
+                              </div>
+                            )}
                             <div style={{marginTop: '8px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', fontStyle: 'italic'}}>
                               Shift + колесико мыши для масштабирования
                             </div>
                             <button
                               className="secondary"
                               style={{marginTop: '12px', width: '100%'}}
+                              onClick={openVitrageIDDialog}
+                            >
+                              {placedVitrage.segmentIDs && Object.keys(placedVitrage.segmentIDs).length > 0 ? '✏️ Изменить ID секций' : '🆔 Задать ID секций'}
+                            </button>
+                            <button
+                              className="secondary"
+                              style={{marginTop: '8px', width: '100%'}}
                               onClick={() => {
                                 updateCurrentPlan(plan => ({
                                   ...plan,
@@ -1461,8 +1659,8 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
                 </p>
                 <div className="vitrage-grid">
                   {savedVitrages.map(vitrage => (
-                    <div 
-                      key={vitrage.id} 
+                    <div
+                      key={vitrage.id}
                       className="vitrage-card"
                       onClick={() => selectVitrageForPlacement(vitrage)}
                     >
@@ -1498,6 +1696,272 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
           </div>
         </div>
       )}
+
+      {/* Vitrage ID Dialog */}
+      {showVitrageIDDialog && selectedItem && currentPlan && (() => {
+        const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
+        const vitrage = placedVitrage && savedVitrages.find(v => v.id === placedVitrage.vitrageId)
+        if (!vitrage || !placedVitrage) return null
+
+        return (
+          <div className="modal-overlay">
+            <div className="modal large" style={{maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column'}}>
+              <h3>Настройка ID секций витража: {vitrage.name}</h3>
+              <p style={{marginBottom: '16px', color: '#000000', fontSize: '14px'}}>
+                Кликните на секцию для задания ID. Всего секций: {vitrage.rows} × {vitrage.cols} = {vitrage.rows * vitrage.cols}
+              </p>
+
+              <div style={{display: 'flex', gap: '20px', flex: 1, overflow: 'hidden'}}>
+                {/* Left: Vitrage visualization */}
+                <div style={{flex: '1', display: 'flex', flexDirection: 'column', minWidth: '400px'}}>
+                  <h4 style={{marginBottom: '12px', fontSize: '14px'}}>Визуализация витража</h4>
+                  <div style={{
+                    flex: 1,
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '8px',
+                    padding: '20px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    display: 'grid',
+                    gridTemplateRows: `repeat(${vitrage.rows}, 1fr)`,
+                    gap: '4px',
+                    minHeight: '300px'
+                  }}>
+                    {Array.from({ length: vitrage.rows }).map((_, rowIndex) => (
+                      <div key={rowIndex} style={{
+                        display: 'grid',
+                        gridTemplateColumns: `repeat(${vitrage.cols}, 1fr)`,
+                        gap: '4px'
+                      }}>
+                        {Array.from({ length: vitrage.cols }).map((_, colIndex) => {
+                          const segmentId = `segment-${rowIndex}-${colIndex}`
+                          const hasID = !!segmentIDsTemp[segmentId]
+                          const isSelected = selectedSegmentForID === segmentId
+
+                          return (
+                            <div
+                              key={colIndex}
+                              onClick={() => selectSegmentForID(segmentId)}
+                              style={{
+                                border: isSelected ? '3px solid #4CAF50' : hasID ? '2px solid rgba(76, 175, 80, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+                                borderRadius: '4px',
+                                background: isSelected ? 'rgba(76, 175, 80, 0.3)' : hasID ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '8px',
+                                transition: 'all 0.2s',
+                                minHeight: '60px'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = isSelected ? 'rgba(76, 175, 80, 0.4)' : 'rgba(76, 175, 80, 0.2)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = isSelected ? 'rgba(76, 175, 80, 0.3)' : hasID ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.1)'
+                              }}
+                            >
+                              <div style={{fontSize: '11px', color: '#fff', fontWeight: 'bold'}}>
+                                {rowIndex + 1}-{colIndex + 1}
+                              </div>
+                              {hasID && (
+                                <div style={{fontSize: '9px', color: 'rgba(76, 175, 80, 0.9)', marginTop: '4px', textAlign: 'center', wordBreak: 'break-all'}}>
+                                  ✓ ID
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right: ID form */}
+                <div style={{flex: '1', display: 'flex', flexDirection: 'column', minWidth: '400px'}}>
+                  {selectedSegmentForID ? (
+                    <>
+                      <h4 style={{marginBottom: '12px', fontSize: '14px'}}>
+                        ID для секции {selectedSegmentForID.split('-')[1]}-{selectedSegmentForID.split('-')[2]}
+                      </h4>
+
+                      <div style={{flex: 1, overflowY: 'auto', paddingRight: '8px'}}>
+                        <div style={{display: 'grid', gridTemplateColumns: '1fr', gap: '12px'}}>
+                          <div className="form-group">
+                            <label>1. Объект:</label>
+                            <input
+                              type="text"
+                              list="objects-list"
+                              value={vitrageIDData.object}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, object: e.target.value})}
+                              placeholder="Зил18, Примавера14"
+                            />
+                            <datalist id="objects-list">
+                              {idOptions.objects.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>2. Корпус:</label>
+                            <input
+                              type="text"
+                              list="corpuses-list"
+                              value={vitrageIDData.corpus}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, corpus: e.target.value})}
+                              placeholder="А, Б, 1"
+                            />
+                            <datalist id="corpuses-list">
+                              {idOptions.corpuses.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>3. Секция:</label>
+                            <input
+                              type="text"
+                              list="sections-list"
+                              value={vitrageIDData.section}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, section: e.target.value})}
+                              placeholder="1, 2, 3"
+                            />
+                            <datalist id="sections-list">
+                              {idOptions.sections.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>4. Этаж:</label>
+                            <input
+                              type="text"
+                              list="floors-list"
+                              value={vitrageIDData.floor}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, floor: e.target.value})}
+                              placeholder="1, 2, 3"
+                            />
+                            <datalist id="floors-list">
+                              {idOptions.floors.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>5. Квартира:</label>
+                            <input
+                              type="text"
+                              list="apartments-list"
+                              value={vitrageIDData.apartment}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, apartment: e.target.value})}
+                              placeholder="1, 2, 101"
+                            />
+                            <datalist id="apartments-list">
+                              {idOptions.apartments.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>6. Номер витража:</label>
+                            <input
+                              type="text"
+                              list="vitrage-numbers-list"
+                              value={vitrageIDData.vitrageNumber}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, vitrageNumber: e.target.value})}
+                              placeholder="1, 2, 3"
+                            />
+                            <datalist id="vitrage-numbers-list">
+                              {idOptions.vitrageNumbers.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>7. Название витража:</label>
+                            <input
+                              type="text"
+                              list="vitrage-names-list"
+                              value={vitrageIDData.vitrageName}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, vitrageName: e.target.value})}
+                              placeholder="В1, Окно, Дверь"
+                            />
+                            <datalist id="vitrage-names-list">
+                              {idOptions.vitrageNames.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>8. Секция витража:</label>
+                            <input
+                              type="text"
+                              list="vitrage-sections-list"
+                              value={vitrageIDData.vitrageSection}
+                              onChange={(e) => setVitrageIDData({...vitrageIDData, vitrageSection: e.target.value})}
+                              placeholder="A, B, 1"
+                            />
+                            <datalist id="vitrage-sections-list">
+                              {idOptions.vitrageSections.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+                        </div>
+
+                        {/* Preview of generated ID */}
+                        <div style={{
+                          padding: '12px',
+                          background: 'rgba(33, 150, 243, 0.1)',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(33, 150, 243, 0.3)',
+                          marginTop: '16px'
+                        }}>
+                          <div style={{fontSize: '11px', color: 'rgba(0, 0, 0, 0.7)', marginBottom: '6px'}}>
+                            Предварительный просмотр ID:
+                          </div>
+                          <div style={{fontSize: '13px', color: 'rgba(76, 175, 80, 0.9)', fontWeight: 'bold', wordBreak: 'break-all'}}>
+                            {generateFullID(vitrageIDData) || '(пусто)'}
+                          </div>
+                        </div>
+
+                        <button
+                          className="primary"
+                          onClick={saveSegmentID}
+                          style={{width: '100%', marginTop: '16px'}}
+                        >
+                          Сохранить ID для секции
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'rgba(255, 255, 255, 0.6)',
+                      textAlign: 'center',
+                      padding: '40px'
+                    }}>
+                      <div>
+                        <div style={{fontSize: '48px', marginBottom: '16px'}}>👆</div>
+                        <div style={{fontSize: '16px'}}>Выберите секцию слева<br/>для настройки ID</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-actions" style={{marginTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '16px'}}>
+                <button
+                  className="secondary"
+                  onClick={() => setShowVitrageIDDialog(false)}
+                >
+                  Отмена
+                </button>
+                <button
+                  className="primary"
+                  onClick={saveAllSegmentIDs}
+                >
+                  Завершить настройку ID
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

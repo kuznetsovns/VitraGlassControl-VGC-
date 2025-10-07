@@ -2,7 +2,8 @@
 .facade-plan-editor {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  width: 100%;
   background: linear-gradient(135deg,
     rgba(229, 231, 235, 0.08) 0%,
     rgba(243, 244, 246, 0.12) 50%,
@@ -11,19 +12,44 @@
 
 .editor-toolbar {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
+  padding: 12px 20px;
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(173, 216, 230, 0.3);
+  gap: 16px;
   flex-wrap: wrap;
+  min-height: 60px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .compact-toolbar {
   gap: 12px;
-  padding: 8px 16px;
+  padding: 12px 20px;
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tool-group {
+  display: flex;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid rgba(173, 216, 230, 0.3);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .dropdown-container {
@@ -118,20 +144,22 @@
 }
 
 .toolbar-btn {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
   background: white;
   color: #333;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .toolbar-btn:hover {
   background: #f5f5f5;
-  border-color: #ccc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .toolbar-btn.primary {

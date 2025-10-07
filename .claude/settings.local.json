@@ -25,7 +25,15 @@
       "Bash(git stash:*)",
       "Bash(npx tsc:*)",
       "Bash(move srctypes.ts srctypes.tsx)",
-      "Bash(git pull:*)"
+      "Bash(start http://localhost:5174)",
+      "Bash(taskkill:*)",
+      "Bash(start http://localhost:5175)",
+      "Bash(git restore:*)",
+      "Bash(del /S /Q srccomponentsVitrageDemo)",
+      "Bash(del /S /Q srccomponentsVitrageVisualizer)",
+      "Bash(del /S /Q srctypes)",
+      "Bash(git config:*)",
+      "Bash(start http://localhost:5176)"
     ],
     "deny": [],
     "ask": []
