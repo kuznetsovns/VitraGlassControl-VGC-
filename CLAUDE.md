@@ -267,10 +267,14 @@ interface VitrageConfig {
 
 ## Environment Configuration
 
-The project uses environment variables stored in `.env`:
-- **Supabase Integration**: The application is configured to use Supabase for backend services
-- Environment variables are prefixed with `VITE_` to be accessible in the frontend
-- **Important**: Never commit real API keys or sensitive credentials to the repository
+The project is configured with Supabase backend integration:
+- **Supabase Client**: Database connection configured via `src/lib/supabase.ts`
+- **Environment Variables**: Stored in `.env` file (gitignored)
+  - `VITE_SUPABASE_URL`: Project URL
+  - `VITE_SUPABASE_ANON_KEY`: Public anonymous key
+- **Type Safety**: Environment variables are typed in `src/vite-env.d.ts`
+- **Current Storage**: Application still uses browser localStorage, Supabase client is ready for future integration
+- **Important**: Never commit `.env` files with real credentials to the repository
 
 ## Repository Structure
 
@@ -278,11 +282,20 @@ The project uses environment variables stored in `.env`:
 
 ## Data Flow and Storage
 
-The application uses **browser localStorage** for all data persistence:
+The application uses **hybrid storage**:
+
+### Browser localStorage (Client-side)
 - **Vitrages**: Stored under key `'saved-vitrages'` as JSON array of VitrageGrid objects
 - **Floor Plans**: Stored under key `'floorPlans'` as JSON array of FloorPlan objects
 - **Facade Plans**: Stored under key `'facadePlans'` as JSON array of FacadePlan objects
-- **No Backend**: Currently no server-side persistence, all data is client-side only
+
+### Supabase Database (Server-side)
+- **Objects Table**: Stores construction objects with shared access for all users
+  - Schema: `id`, `name`, `customer`, `address`, `corpus_count`, `photo_url`, `created_at`, `updated_at`
+  - Location: `supabase/migrations/001_create_objects_table.sql`
+  - Types: `src/types/database.ts`
+  - Access: Public read/write with Row Level Security enabled
+  - Migration instructions: See `supabase/README.md`
 
 ### Data Sharing Between Components
 - **Vitrage Visualizer** → **Vitrage Specification**: Vitrages created in visualizer are saved to localStorage
