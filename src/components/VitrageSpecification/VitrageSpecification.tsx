@@ -4,6 +4,8 @@ import './VitrageSpecification.css'
 export interface VitrageGrid {
   id: string
   name: string
+  siteManager?: string
+  creationDate?: string
   rows: number
   cols: number
   segments: VitrageSegment[]
@@ -58,10 +60,14 @@ export default function VitrageSpecification() {
     if (savedVitrages) {
       try {
         const parsed = JSON.parse(savedVitrages)
-        setVitrages(parsed.map((v: any) => ({
-          ...v,
-          createdAt: new Date(v.createdAt)
-        })))
+        console.log('Загруженные витражи из localStorage:', parsed)
+        setVitrages(parsed.map((v: any) => {
+          console.log('Витраж:', v.name, 'Начальник участка:', v.siteManager, 'Дата создания:', v.creationDate)
+          return {
+            ...v,
+            createdAt: new Date(v.createdAt)
+          }
+        }))
       } catch (error) {
         console.error('Ошибка при загрузке витражей:', error)
       }
@@ -149,6 +155,12 @@ export default function VitrageSpecification() {
                 >
                   <div className="vitrage-name">{vitrage.name}</div>
                   <div className="vitrage-info">
+                    {vitrage.siteManager && (
+                      <div>Начальник участка: {vitrage.siteManager}</div>
+                    )}
+                    {vitrage.creationDate && (
+                      <div>Дата создания: {new Date(vitrage.creationDate).toLocaleDateString('ru-RU')}</div>
+                    )}
                     <div>Сетка: {vitrage.rows}×{vitrage.cols}</div>
                     <div>Площадь: {getTotalArea(vitrage).toFixed(2)} м²</div>
                     <div>Создан: {vitrage.createdAt.toLocaleDateString('ru-RU')}</div>
@@ -162,7 +174,13 @@ export default function VitrageSpecification() {
         {selectedVitrage && (
           <div className="vitrage-details">
             <h3>Спецификация витража "{selectedVitrage.name}"</h3>
-            
+            {selectedVitrage.siteManager && (
+              <p className="vitrage-site-manager"><strong>Начальник участка:</strong> {selectedVitrage.siteManager}</p>
+            )}
+            {selectedVitrage.creationDate && (
+              <p className="vitrage-site-manager"><strong>Дата создания:</strong> {new Date(selectedVitrage.creationDate).toLocaleDateString('ru-RU')}</p>
+            )}
+
             <div className="specification-table">
               <table>
                 <thead>

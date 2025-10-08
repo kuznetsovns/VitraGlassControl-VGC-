@@ -24,36 +24,61 @@ VitraGlassControl is a specialized React + TypeScript + Vite application for man
 - `src/components/MainPage.tsx` - Landing page with introduction and workflow information
 - `src/components/VitrageVisualizer/VitrageVisualizer.tsx` - Interactive vitrage visualizer with segment-by-segment editing
 - `src/components/GraphicsEditor/GraphicsEditor.tsx` - Legacy canvas-based graphics editor (deprecated, use VitrageVisualizer)
-- `src/components/VitrageSpecification/VitrageSpecification.tsx` - Vitrage library and specification management
+- `src/components/VitrageSpecification/VitrageSpecification.tsx` - Vitrage library and specification management (legacy)
+- `src/components/VitrageSpecificationNew/VitrageSpecificationNew.tsx` - New vitrage specification with cards and editing
+- `src/components/DefectTracking/DefectTracking.tsx` - Defect tracking system for vitrages
 - `src/components/FloorPlanEditor/FloorPlanEditor.tsx` - Floor plan editor for placing vitrages on building plans
 - `src/components/FacadePlanEditor/FacadePlanEditor.tsx` - Facade plan editor for placing vitrages on facade plans
 
-### Navigation Sections
-The sidebar provides access to 8 main sections:
-1. **Визуализатор Витража** - Interactive vitrage visualizer with individual segment editing
-2. **Спецификация витражей** - Vitrage specification library and management
-3. **План этажей** - Floor plan editor for placing vitrages on floor plans
-4. **Планы фасадов** - Facade plan editor for placing vitrages on facade plans
-5. **Поддержка** - Support information
-6. **Настройки** - Settings
-7. **Администрирование** - Administration
+### Department-Based Navigation
+The application uses a multi-department workflow with context-aware menus:
+
+**Initial Flow**: MainPage → Department Selection → Department-Specific Menu
+
+**Three Department Types**:
+1. **УОК (Отдел УОК)** - Full access to:
+   - Визуализатор Витража - Interactive vitrage visualizer with segment editing
+   - Спецификация Витражей - Vitrage specification library and management
+   - Дефектовка - Defect tracking for vitrages
+   - План этажей - Floor plan editor for placing vitrages on building plans
+   - Планы фасадов - Facade plan editor for placing vitrages on facade plans
+   - Поддержка - Support information
+   - Настройки - Settings
+   - Администрирование - Administration
+
+2. **Снабжение (Отдел снабжения)** - Supply department with:
+   - Оформление заказа - Order form
+   - Поддержка - Support
+   - Настройки - Settings
+
+3. **Гарантия (Гарантийный отдел)** - Warranty department with:
+   - Оформление заказа - Order form
+   - Поддержка - Support
+   - Настройки - Settings
 
 ### Key Features
-1. **Vitrage Visualizer**: Interactive segment-by-segment vitrage editor with:
+1. **Object Management System**: Main landing page with Supabase-backed object storage:
+   - Create/edit/delete construction objects (projects)
+   - Object properties: name, customer, address, corpus count, photo
+   - Department-based access control (УОК, Снабжение, Гарантия)
+   - Card-based grid layout with visual previews
+   - Direct integration with Supabase for shared access across users
+
+2. **Vitrage Visualizer**: Interactive segment-by-segment vitrage editor with:
    - Grid-based creation with configurable rows and columns
    - Individual segment property editing (width, height, type, formula)
    - Real-time position recalculation based on segment dimensions
    - Visual canvas rendering with segment selection
    - Save/load functionality for vitrage configurations
 
-2. **Graphics Editor (Legacy)**: Canvas-based drawing tool with:
+3. **Graphics Editor (Legacy)**: Canvas-based drawing tool with:
    - Grid-based vitrage creation system
    - Drawing tools (select, glass unit creation, profile creation)
    - Click-to-edit dimensions and properties
    - Segment merging for complex configurations
    - Profile rendering with intelligent intersections
 
-3. **Floor Plan Editor**: Canvas-based editor for architectural plans with:
+4. **Floor Plan Editor**: Canvas-based editor for architectural plans with:
    - Import floor plan images as background reference
    - Place vitrages from specification library onto floor plans
    - Individual vitrage scaling with Shift + mouse wheel (10% to 300%)
@@ -64,7 +89,7 @@ The sidebar provides access to 8 main sections:
    - Organize plans by building (corpus), section, and floor
    - Auto-save functionality with unsaved changes indicator
 
-4. **Facade Plan Editor**: Canvas-based editor for facade plans with:
+5. **Facade Plan Editor**: Canvas-based editor for facade plans with:
    - Import background images as reference
    - Background image scaling with Shift + wheel (zoom to cursor)
    - Background panning with middle mouse button
@@ -75,8 +100,8 @@ The sidebar provides access to 8 main sections:
    - Organize by building (corpus), section, and floor
    - Auto-save to localStorage
 
-5. **Multi-language Support**: Russian interface for architectural/construction terminology
-6. **Local Storage Persistence**: All vitrages and plans saved to browser localStorage
+6. **Multi-language Support**: Russian interface for architectural/construction terminology
+7. **Hybrid Storage**: Supabase backend for shared objects + localStorage for user-specific data
 
 ## TypeScript Configuration
 
@@ -102,6 +127,22 @@ ESLint is configured with:
 The project enforces strict TypeScript settings including unused variable detection and no fallthrough cases in switch statements.
 
 ## Important Data Models
+
+### ProjectObject Interface
+Located in `src/components/MainPage.tsx`
+
+```typescript
+interface ProjectObject {
+  id: string
+  name: string                // Object/project name
+  customer: string            // Customer company
+  address: string             // Construction address
+  buildingsCount: number      // Number of buildings/corpus
+  image?: string              // Base64 encoded photo
+  createdAt: Date
+  updatedAt: Date
+}
+```
 
 ### VitrageSegment Interface
 Located in `src/components/GraphicsEditor/GraphicsEditor.tsx`
@@ -293,11 +334,16 @@ The application uses **hybrid storage**:
 - **Objects Table**: Stores construction objects with shared access for all users
   - Schema: `id`, `name`, `customer`, `address`, `corpus_count`, `photo_url`, `created_at`, `updated_at`
   - Location: `supabase/migrations/001_create_objects_table.sql`
-  - Types: `src/types/database.ts`
+  - Types: `src/types/database.ts` - TypeScript types for Database schema
   - Access: Public read/write with Row Level Security enabled
+  - Client: `src/lib/supabase.ts` - Supabase client configuration
   - Migration instructions: See `supabase/README.md`
+  - **Active Usage**: MainPage.tsx loads/saves all objects to Supabase for multi-user access
 
 ### Data Sharing Between Components
+- **MainPage** → **Supabase**: Construction objects (projects) are stored in Supabase for shared access
+- **MainPage** → **Layout**: Selected object and department passed to Layout via callbacks
+- **Layout** → **MainContent**: Active menu item and department context passed down
 - **Vitrage Visualizer** → **Vitrage Specification**: Vitrages created in visualizer are saved to localStorage
 - **Graphics Editor** → **Vitrage Specification**: Legacy editor also saves to same localStorage key (deprecated)
 - **Vitrage Specification** → **Floor/Facade Plan Editors**: Plan editors load vitrages from localStorage to place on plans
@@ -330,6 +376,8 @@ When making changes to the application:
 
 - **File Operations**: ALWAYS prefer editing existing files over creating new ones. This is a mature codebase with established patterns.
 - **Component Duplication**: Be aware of the VitrageVisualizer vs GraphicsEditor distinction. VitrageVisualizer is the newer approach.
-- **Data Persistence**: Remember all data is localStorage-based. Consider data migration when changing interfaces.
+- **Data Persistence**: Hybrid storage model - Supabase for shared objects, localStorage for user-specific data. Consider data migration when changing interfaces.
 - **Russian UI**: Maintain Russian language for all user-facing text and architectural terminology.
 - **Canvas Work**: Both editors use HTML5 Canvas with different rendering approaches - study existing code before modifications.
+- **Department Context**: Application flow starts with object selection, then department selection, then department-specific tools. Keep this context in mind when adding features.
+- **Supabase Integration**: MainPage actively uses Supabase for object storage. Other components still use localStorage but are ready for future Supabase integration.

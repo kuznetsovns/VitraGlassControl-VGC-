@@ -93,12 +93,16 @@ export default function VitrageVisualizer() {
   const [newObjectName, setNewObjectName] = useState('');
   const [newVersionName, setNewVersionName] = useState('');
   const [vitrageName, setVitrageName] = useState('');
+  const [siteManager, setSiteManager] = useState('');
+  const [creationDate, setCreationDate] = useState('');
   const [horizontalSegments, setHorizontalSegments] = useState('');
   const [verticalSegments, setVerticalSegments] = useState('');
 
   // Состояние для созданного витража
   const [createdVitrage, setCreatedVitrage] = useState<{
     name: string;
+    siteManager?: string;
+    creationDate?: string;
     horizontal: number;
     vertical: number;
   } | null>(null);
@@ -107,12 +111,17 @@ export default function VitrageVisualizer() {
   const [savedVitrages, setSavedVitrages] = useState<Array<{
     id: string;
     name: string;
+    siteManager?: string;
+    creationDate?: string;
     horizontal: number;
     vertical: number;
     segments: typeof segmentProperties;
     createdAt: Date;
   }>>([]);
 
+  const vitrageNameRef = useRef<HTMLInputElement>(null);
+  const siteManagerRef = useRef<HTMLInputElement>(null);
+  const creationDateRef = useRef<HTMLInputElement>(null);
   const horizontalRef = useRef<HTMLInputElement>(null);
   const verticalRef = useRef<HTMLInputElement>(null);
   const createBtnRef = useRef<HTMLButtonElement>(null);
@@ -247,6 +256,20 @@ export default function VitrageVisualizer() {
   const handleVitrageNameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      siteManagerRef.current?.focus();
+    }
+  };
+
+  const handleSiteManagerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      creationDateRef.current?.focus();
+    }
+  };
+
+  const handleCreationDateKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
       horizontalRef.current?.focus();
     }
   };
@@ -287,6 +310,8 @@ export default function VitrageVisualizer() {
     // Создаем витраж
     setCreatedVitrage({
       name: vitrageName,
+      siteManager: siteManager.trim() || undefined,
+      creationDate: creationDate.trim() || undefined,
       horizontal,
       vertical
     });
@@ -472,6 +497,8 @@ export default function VitrageVisualizer() {
       const vitrageData = {
         id: Date.now().toString(),
         name: createdVitrage.name,
+        siteManager: createdVitrage.siteManager,
+        creationDate: createdVitrage.creationDate,
         objectId: selectedObject,
         versionId: selectedVersion,
         rows: rows,
@@ -897,6 +924,12 @@ export default function VitrageVisualizer() {
         <div className="workspace-header">
           <div className="header-left">
             <h2 className="vitrage-title">{createdVitrage.name}</h2>
+            {createdVitrage.siteManager && (
+              <p className="vitrage-subtitle">Начальник участка: {createdVitrage.siteManager}</p>
+            )}
+            {createdVitrage.creationDate && (
+              <p className="vitrage-subtitle">Дата создания: {new Date(createdVitrage.creationDate).toLocaleDateString('ru-RU')}</p>
+            )}
           </div>
 
           <div className="header-controls">
@@ -1507,12 +1540,40 @@ export default function VitrageVisualizer() {
           <div className="form-group">
             <label htmlFor="vitrage-name">Маркировка витража:</label>
             <input
+              ref={vitrageNameRef}
               id="vitrage-name"
               type="text"
               value={vitrageName}
               onChange={(e) => setVitrageName(e.target.value)}
               onKeyDown={handleVitrageNameKeyDown}
               placeholder="Например: В-01, ВТ-003"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="site-manager">Начальник участка:</label>
+            <input
+              ref={siteManagerRef}
+              id="site-manager"
+              type="text"
+              value={siteManager}
+              onChange={(e) => setSiteManager(e.target.value)}
+              onKeyDown={handleSiteManagerKeyDown}
+              placeholder="Введите ФИО начальника участка"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="creation-date">Дата создания:</label>
+            <input
+              ref={creationDateRef}
+              id="creation-date"
+              type="date"
+              value={creationDate}
+              onChange={(e) => setCreationDate(e.target.value)}
+              onKeyDown={handleCreationDateKeyDown}
               autoComplete="off"
             />
           </div>
@@ -1559,6 +1620,8 @@ export default function VitrageVisualizer() {
         <h3>Предварительный просмотр</h3>
         <div className="preview-info">
           <p><strong>Маркировка:</strong> {vitrageName || '—'}</p>
+          <p><strong>Начальник участка:</strong> {siteManager || '—'}</p>
+          <p><strong>Дата создания:</strong> {creationDate ? new Date(creationDate).toLocaleDateString('ru-RU') : '—'}</p>
           <p><strong>Сетка:</strong> {horizontalSegments || '0'} × {verticalSegments || '0'} сегментов</p>
           <p><strong>Всего сегментов:</strong> {(parseInt(horizontalSegments) || 0) * (parseInt(verticalSegments) || 0)}</p>
         </div>

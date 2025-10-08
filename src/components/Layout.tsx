@@ -14,6 +14,7 @@ export type Department = 'УОК' | 'Снабжение' | 'Гарантия' | 
 const uokMenuItems: MenuItem[] = [
   { id: 'vitrage-visualizer', label: 'Визуализатор Витража', icon: '🎨' },
   { id: 'specification-new', label: 'Спецификация Витражей', icon: '📋' },
+  { id: 'defect-tracking', label: 'Дефектовка', icon: '🔍' },
   { id: 'floor-plans', label: 'План этажей', icon: '🏢' },
   { id: 'facade-plans', label: 'Планы фасадов', icon: '🏗️' },
   { id: 'support', label: 'Поддержка', icon: '❓' },

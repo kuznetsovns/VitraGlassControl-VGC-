@@ -1,6 +1,7 @@
 import GraphicsEditor from './GraphicsEditor/GraphicsEditor'
 import VitrageSpecification from './VitrageSpecification/VitrageSpecification'
 import VitrageSpecificationNew from './VitrageSpecificationNew/VitrageSpecificationNew'
+import DefectTracking from './DefectTracking/DefectTracking'
 import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
 import FacadePlanEditor from './FacadePlanEditor/FacadePlanEditor'
 import VitrageVisualizer from './VitrageVisualizer/VitrageVisualizer'
@@ -65,7 +66,14 @@ export default function MainContent({ activeSection, onSectionChange, onDepartme
             <VitrageSpecification />
           </div>
         )
-      
+
+      case 'defect-tracking':
+        return (
+          <div className="content-section">
+            <DefectTracking />
+          </div>
+        )
+
       case 'floor-plans':
         return (
           <div className="content-section fullscreen-section">

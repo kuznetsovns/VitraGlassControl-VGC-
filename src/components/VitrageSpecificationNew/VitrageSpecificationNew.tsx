@@ -17,6 +17,8 @@ interface ObjectVersion {
 interface VitrageItem {
   id: string;
   name: string;
+  siteManager?: string;
+  creationDate?: string;
   objectId: string;
   versionId: string;
   rows: number;
@@ -223,12 +225,14 @@ export default function VitrageSpecificationNew() {
     let csvContent = '\uFEFF'; // BOM для правильного отображения кириллицы в Excel
 
     // Заголовок
-    csvContent += 'Витраж;Объект;Версия;Сетка;Сегментов;Площадь (м²);Обозначение;Тип заполнения;Длина (мм);Ширина (мм);Площадь сегмента (м²);Формула стекла\n';
+    csvContent += 'Витраж;Объект;Версия;Начальник участка;Дата создания;Сетка;Сегментов;Площадь (м²);Обозначение;Тип заполнения;Длина (мм);Ширина (мм);Площадь сегмента (м²);Формула стекла\n';
 
     // Данные
     filteredVitrages.forEach(vitrage => {
       const objectName = getObjectName(vitrage.objectId);
       const versionName = getVersionName(vitrage.objectId, vitrage.versionId);
+      const siteManager = vitrage.siteManager || '—';
+      const creationDate = vitrage.creationDate || '—';
       const grid = `${vitrage.rows} × ${vitrage.cols}`;
       const totalArea = calculateTotalArea(vitrage).toFixed(2);
 
@@ -240,7 +244,7 @@ export default function VitrageSpecificationNew() {
         const area = calculateSegmentArea(segment) > 0 ? calculateSegmentArea(segment).toFixed(4) : '—';
         const formula = segment.formula || '—';
 
-        csvContent += `${vitrage.name};${objectName};${versionName};${grid};${vitrage.segments.length};${totalArea};${label};${type};${height};${width};${area};${formula}\n`;
+        csvContent += `${vitrage.name};${objectName};${versionName};${siteManager};${creationDate};${grid};${vitrage.segments.length};${totalArea};${label};${type};${height};${width};${area};${formula}\n`;
       });
     });
 
@@ -336,6 +340,18 @@ export default function VitrageSpecificationNew() {
                     <span className="info-label">Версия:</span>
                     <span className="info-value">{getVersionName(vitrage.objectId, vitrage.versionId)}</span>
                   </div>
+                  {vitrage.siteManager && (
+                    <div className="info-row">
+                      <span className="info-label">Начальник участка:</span>
+                      <span className="info-value">{vitrage.siteManager}</span>
+                    </div>
+                  )}
+                  {vitrage.creationDate && (
+                    <div className="info-row">
+                      <span className="info-label">Дата создания:</span>
+                      <span className="info-value">{vitrage.creationDate}</span>
+                    </div>
+                  )}
                   <div className="info-row">
                     <span className="info-label">Сегментов:</span>
                     <span className="info-value">{vitrage.segments.length}</span>
@@ -381,6 +397,18 @@ export default function VitrageSpecificationNew() {
                 <span className="summary-label">Общая площадь:</span>
                 <span className="summary-value">{calculateTotalArea(selectedVitrageForDetails).toFixed(2)} м²</span>
               </div>
+              {selectedVitrageForDetails.siteManager && (
+                <div className="summary-item">
+                  <span className="summary-label">Начальник участка:</span>
+                  <span className="summary-value">{selectedVitrageForDetails.siteManager}</span>
+                </div>
+              )}
+              {selectedVitrageForDetails.creationDate && (
+                <div className="summary-item">
+                  <span className="summary-label">Дата создания:</span>
+                  <span className="summary-value">{selectedVitrageForDetails.creationDate}</span>
+                </div>
+              )}
             </div>
 
             {/* Отрисовка витража */}
