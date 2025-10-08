@@ -443,10 +443,10 @@ export default function VitrageVisualizer() {
         else if (properties?.type === 'Дверной блок') fillColor = "rgba(139, 69, 19, 0.2)";
         else if (properties?.type === 'Сэндвич-панель') fillColor = "rgba(255, 228, 181, 0.2)";
 
-        svgContent += `<rect x="${x}" y="${y}" width="${actualWidth}" height="${actualHeight}" fill="${fillColor}" stroke="#87ceeb" stroke-width="2"/>`;
+        svgContent += `<rect x="${x}" y="${y}" width="${actualWidth}" height="${actualHeight}" fill="${fillColor}" stroke="#87ceeb" stroke-width="2" data-segment-id="${segmentId}" class="vitrage-segment" style="cursor: pointer;"/>`;
 
         if (properties?.label) {
-          svgContent += `<text x="${x + actualWidth / 2}" y="${y + actualHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="#2c3e50" font-weight="600">${properties.label}</text>`;
+          svgContent += `<text x="${x + actualWidth / 2}" y="${y + actualHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="#2c3e50" font-weight="600" pointer-events="none">${properties.label}</text>`;
         }
       }
     }
