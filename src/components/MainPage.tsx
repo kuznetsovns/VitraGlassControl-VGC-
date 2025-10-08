@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Department } from './Layout'
 import './MainPage.css'
@@ -19,11 +20,10 @@ export interface MainPageProps {
 }
 
 export default function MainPage({ onDepartmentSelect }: MainPageProps) {
+  const navigate = useNavigate()
   const [objects, setObjects] = useState<ProjectObject[]>([])
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
-  const [showDepartmentDialog, setShowDepartmentDialog] = useState(false)
-  const [selectedObjectForOpen, setSelectedObjectForOpen] = useState<ProjectObject | null>(null)
   const [editingObjectId, setEditingObjectId] = useState<string | null>(null)
   const [newObjectData, setNewObjectData] = useState({
     name: '',
@@ -43,10 +43,7 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showDepartmentDialog) {
-          setShowDepartmentDialog(false)
-          setSelectedObjectForOpen(null)
-        } else if (showEditDialog) {
+        if (showEditDialog) {
           setShowEditDialog(false)
           setEditingObjectId(null)
           setSelectedImage(null)
@@ -71,11 +68,11 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
 
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [showDepartmentDialog, showEditDialog, showCreateDialog])
+  }, [showEditDialog, showCreateDialog])
 
   // Block body scroll when any modal is open
   useEffect(() => {
-    if (showCreateDialog || showEditDialog || showDepartmentDialog) {
+    if (showCreateDialog || showEditDialog) {
       // Save current scroll position
       const scrollY = window.scrollY
 
@@ -96,7 +93,7 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
         window.scrollTo(0, scrollY)
       }
     }
-  }, [showCreateDialog, showEditDialog, showDepartmentDialog])
+  }, [showCreateDialog, showEditDialog])
 
   const loadObjects = async () => {
     try {
@@ -302,36 +299,9 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
     }
   }
 
-  // Open object - show department selection
+  // Open object - navigate to object page
   const openObject = (object: ProjectObject) => {
-    setSelectedObjectForOpen(object)
-    setShowDepartmentDialog(true)
-  }
-
-  // Select department and navigate
-  const selectDepartment = (departmentName: string) => {
-    if (!selectedObjectForOpen || !onDepartmentSelect) return
-
-    // Map department name to Department type
-    let department: Department = null
-    switch (departmentName) {
-      case 'Отдел УОК':
-        department = 'УОК'
-        break
-      case 'Отдел снабжения':
-        department = 'Снабжение'
-        break
-      case 'Гарантийный отдел':
-        department = 'Гарантия'
-        break
-    }
-
-    if (department) {
-      onDepartmentSelect(department, selectedObjectForOpen.id, selectedObjectForOpen.name)
-    }
-
-    setShowDepartmentDialog(false)
-    setSelectedObjectForOpen(null)
+    navigate(`/object/${object.id}`)
   }
 
   // Clear image selection
@@ -697,82 +667,6 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
                 Сохранить изменения
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Department Selection Dialog */}
-      {showDepartmentDialog && selectedObjectForOpen && (
-        <div
-          className="department-modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowDepartmentDialog(false)
-              setSelectedObjectForOpen(null)
-            }
-          }}
-        >
-          <div className="department-modal-container">
-            {/* Header */}
-            <div className="department-modal-header">
-              <div className="department-header-icon">🏢</div>
-              <h2 className="department-modal-title">Выберите отдел</h2>
-              <p className="department-modal-subtitle">
-                Объект: <strong>{selectedObjectForOpen.name}</strong>
-              </p>
-            </div>
-
-            {/* Department Cards */}
-            <div className="department-cards-grid">
-              <div
-                className="department-card"
-                onClick={() => selectDepartment('Отдел снабжения')}
-              >
-                <div className="department-card-icon">📦</div>
-                <h3 className="department-card-title">Отдел снабжения</h3>
-                <p className="department-card-description">
-                  Управление поставками, оформление заказов и контроль материалов
-                </p>
-                <div className="department-card-arrow">→</div>
-              </div>
-
-              <div
-                className="department-card"
-                onClick={() => selectDepartment('Гарантийный отдел')}
-              >
-                <div className="department-card-icon">🛠️</div>
-                <h3 className="department-card-title">Гарантийный отдел</h3>
-                <p className="department-card-description">
-                  Обработка гарантийных случаев и техническая поддержка
-                </p>
-                <div className="department-card-arrow">→</div>
-              </div>
-
-              <div
-                className="department-card"
-                onClick={() => selectDepartment('Отдел УОК')}
-              >
-                <div className="department-card-icon">📋</div>
-                <h3 className="department-card-title">Отдел УОК</h3>
-                <p className="department-card-description">
-                  Полный доступ к проектированию, спецификациям и визуализации
-                </p>
-                <div className="department-card-arrow">→</div>
-              </div>
-            </div>
-
-            {/* Close Button */}
-            <button
-              className="department-close-btn"
-              onClick={() => {
-                setShowDepartmentDialog(false)
-                setSelectedObjectForOpen(null)
-              }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
           </div>
         </div>
       )}
