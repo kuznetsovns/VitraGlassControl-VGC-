@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import './Layout.css'
 import MainContent from './MainContent'
 
@@ -36,24 +38,62 @@ const warrantyMenuItems: MenuItem[] = [
 ]
 
 export default function Layout() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const params = useParams<{ id?: string; department?: string; section?: string }>()
+
   const [activeMenuItem, setActiveMenuItem] = useState('main')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true) // Start collapsed
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [currentDepartment, setCurrentDepartment] = useState<Department>(null)
   const [selectedObject, setSelectedObject] = useState<{id: string, name: string} | null>(null)
+
+  // Load object data from URL params
+  useEffect(() => {
+    const loadObjectFromParams = async () => {
+      if (params.id && params.department && params.section) {
+        // Load object data from Supabase
+        const { data, error } = await supabase
+          .from('objects')
+          .select('id, name')
+          .eq('id', params.id)
+          .single()
+
+        if (!error && data) {
+          setSelectedObject({ id: data.id, name: data.name })
+          setCurrentDepartment(params.department as Department)
+          setActiveMenuItem(params.section)
+          setSidebarCollapsed(false)
+        }
+      } else if (location.pathname === '/') {
+        // Reset to main page
+        setActiveMenuItem('main')
+        setCurrentDepartment(null)
+        setSelectedObject(null)
+        setSidebarCollapsed(true)
+      }
+    }
+
+    loadObjectFromParams()
+  }, [params.id, params.department, params.section, location.pathname])
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
   const handleLogoClick = () => {
-    // Возврат на главную - сброс всех выборов
-    setActiveMenuItem('main')
-    setCurrentDepartment(null)
-    setSelectedObject(null)
-    setSidebarCollapsed(true)
+    // Navigate to home page
+    navigate('/')
   }
 
-  // Функция для выбора отдела и объекта
+  const handleMenuItemClick = (itemId: string) => {
+    setActiveMenuItem(itemId)
+    if (selectedObject && currentDepartment) {
+      // Update URL when menu item changes
+      navigate(`/object/${selectedObject.id}/department/${currentDepartment}/${itemId}`)
+    }
+  }
+
+  // Функция для выбора отдела и объекта (deprecated - now handled by URL params)
   const handleDepartmentSelect = (department: Department, objectId: string, objectName: string) => {
     setCurrentDepartment(department)
     setSelectedObject({ id: objectId, name: objectName })
@@ -111,7 +151,7 @@ export default function Layout() {
               <button
                 key={item.id}
                 className={`menu-item ${activeMenuItem === item.id ? 'active' : ''}`}
-                onClick={() => setActiveMenuItem(item.id)}
+                onClick={() => handleMenuItemClick(item.id)}
                 title={sidebarCollapsed ? item.label : ''}
               >
                 <span className="menu-icon">{item.icon}</span>
