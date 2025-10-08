@@ -569,6 +569,53 @@
   margin: 0 0 15px 0;
 }
 
+.inspection-info {
+  background: #fff9e6;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+  border: 1px solid #ffd966;
+}
+
+.inspection-info h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0 0 15px 0;
+}
+
+.inspection-info .info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.inspection-info .info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-input {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #2c3e50;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.info-input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.info-input::placeholder {
+  color: #adb5bd;
+}
+
 .defects-list h4 {
   font-size: 16px;
   font-weight: 700;
@@ -576,18 +623,202 @@
   margin: 0 0 15px 0;
 }
 
-.empty-defects {
-  text-align: center;
-  padding: 40px 20px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 2px dashed #dee2e6;
+/* Выбранные дефекты */
+.selected-defects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 15px;
 }
 
-.empty-defects p {
-  font-size: 16px;
+.defect-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 16px;
+  font-size: 13px;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.remove-defect-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: #1976d2;
+  color: #ffffff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.remove-defect-btn:hover {
+  background: #1565c0;
+}
+
+/* Выпадающий список дефектов */
+.defect-dropdown-container {
+  position: relative;
+}
+
+.defect-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.defect-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #dee2e6;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.close-dropdown-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
   color: #6c757d;
-  margin: 0 0 15px 0;
+  font-size: 20px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.close-dropdown-btn:hover {
+  color: #2c3e50;
+}
+
+.defect-options {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  max-height: 250px;
+}
+
+.defect-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.defect-option:hover {
+  background: #f8f9fa;
+}
+
+.defect-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #4a90e2;
+}
+
+.defect-option span {
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.defect-dropdown-footer {
+  padding: 12px 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.new-defect-btn {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a90e2;
+  background: transparent;
+  border: 1px dashed #4a90e2;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.new-defect-btn:hover {
+  background: #e3f2fd;
+}
+
+.new-defect-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.new-defect-input {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+}
+
+.new-defect-input:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.new-defect-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.save-defect-btn,
+.cancel-defect-btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-defect-btn {
+  background: #4a90e2;
+  color: #ffffff;
+}
+
+.save-defect-btn:hover {
+  background: #357abd;
+}
+
+.cancel-defect-btn {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.cancel-defect-btn:hover {
+  background: #dee2e6;
 }
 
 .add-defect-btn {
@@ -609,4 +840,42 @@
 
 .add-defect-btn:active {
   transform: translateY(0);
+}
+
+/* Панель действий */
+.panel-actions {
+  padding: 20px;
+  border-top: 2px solid #e9ecef;
+  background: #f8f9fa;
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+}
+
+.save-segment-btn {
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.save-segment-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.save-segment-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
