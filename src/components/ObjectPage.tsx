@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { objectStorage } from '../services/objectStorage'
 import type { Department } from './Layout'
 import type { ProjectObject } from './MainPage'
 import './ObjectPage.css'
@@ -19,31 +19,19 @@ export default function ObjectPage() {
     if (!id) return
 
     try {
-      const { data, error } = await supabase
-        .from('objects')
-        .select('*')
-        .eq('id', id)
-        .single()
+      const { data, error, usingFallback } = await objectStorage.getById(id)
 
-      if (error) {
+      if (error || !data) {
         console.error('Error loading object:', error)
         navigate('/')
         return
       }
 
-      if (data) {
-        const projectObject: ProjectObject = {
-          id: data.id,
-          name: data.name,
-          customer: data.customer || '',
-          address: data.address || '',
-          buildingsCount: data.corpus_count || 1,
-          image: data.photo_url || undefined,
-          createdAt: new Date(data.created_at),
-          updatedAt: new Date(data.updated_at)
-        }
-        setObject(projectObject)
+      if (usingFallback) {
+        console.info('📦 Using localStorage fallback (Supabase unavailable)')
       }
+
+      setObject(data)
     } catch (error) {
       console.error('Error loading object:', error)
       navigate('/')

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { objectStorage } from '../services/objectStorage'
 import './Layout.css'
 import MainContent from './MainContent'
 
@@ -52,14 +52,13 @@ export default function Layout() {
   useEffect(() => {
     const loadObjectFromParams = async () => {
       if (params.id && params.department && params.section) {
-        // Load object data from Supabase
-        const { data, error } = await supabase
-          .from('objects')
-          .select('id, name')
-          .eq('id', params.id)
-          .single()
+        // Load object data from storage
+        const { data, error, usingFallback } = await objectStorage.getById(params.id)
 
         if (!error && data) {
+          if (usingFallback) {
+            console.info('📦 Using localStorage fallback (Supabase unavailable)')
+          }
           setSelectedObject({ id: data.id, name: data.name })
           setCurrentDepartment(params.department as Department)
           setActiveMenuItem(params.section)

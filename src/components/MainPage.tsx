@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { objectStorage } from '../services/objectStorage'
 import type { Department } from './Layout'
 import './MainPage.css'
 
@@ -97,30 +97,19 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
 
   const loadObjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from('objects')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const { data, error, usingFallback } = await objectStorage.getAll()
 
       if (error) {
-        console.error('Error loading objects from Supabase:', error)
-        alert('Ошибка загрузки объектов: ' + error.message)
+        console.error('Error loading objects:', error)
+        alert('Ошибка загрузки объектов')
         return
       }
 
-      if (data) {
-        const objects = data.map(obj => ({
-          id: obj.id,
-          name: obj.name,
-          customer: obj.customer || '',
-          address: obj.address || '',
-          buildingsCount: obj.corpus_count || 1,
-          image: obj.photo_url || undefined,
-          createdAt: new Date(obj.created_at),
-          updatedAt: new Date(obj.updated_at)
-        }))
-        setObjects(objects)
+      if (usingFallback) {
+        console.info('📦 Using localStorage fallback (Supabase unavailable)')
       }
+
+      setObjects(data)
     } catch (error) {
       console.error('Error loading objects:', error)
     }
@@ -156,37 +145,26 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('objects')
-        .insert({
-          name: newObjectData.name,
-          customer: newObjectData.customer,
-          address: newObjectData.address,
-          corpus_count: newObjectData.buildingsCount,
-          photo_url: selectedImage || null
-        })
-        .select()
-        .single()
+      const { data, error, usingFallback } = await objectStorage.create({
+        name: newObjectData.name,
+        customer: newObjectData.customer,
+        address: newObjectData.address,
+        buildingsCount: newObjectData.buildingsCount,
+        image: selectedImage || undefined
+      })
 
       if (error) {
         console.error('Error creating object:', error)
-        alert('Ошибка создания объекта: ' + error.message)
+        alert('Ошибка создания объекта')
         return
       }
 
+      if (usingFallback) {
+        console.info('📦 Object created in localStorage (Supabase unavailable)')
+      }
+
       if (data) {
-        // Add new object to local state
-        const newObject: ProjectObject = {
-          id: data.id,
-          name: data.name,
-          customer: data.customer || '',
-          address: data.address || '',
-          buildingsCount: data.corpus_count || 1,
-          image: data.photo_url || undefined,
-          createdAt: new Date(data.created_at),
-          updatedAt: new Date(data.updated_at)
-        }
-        setObjects([newObject, ...objects])
+        setObjects([data, ...objects])
       }
 
       // Reset form
@@ -209,15 +187,16 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
     if (!confirm('Вы уверены, что хотите удалить этот объект?')) return
 
     try {
-      const { error } = await supabase
-        .from('objects')
-        .delete()
-        .eq('id', objectId)
+      const { error, usingFallback } = await objectStorage.delete(objectId)
 
       if (error) {
         console.error('Error deleting object:', error)
-        alert('Ошибка удаления объекта: ' + error.message)
+        alert('Ошибка удаления объекта')
         return
+      }
+
+      if (usingFallback) {
+        console.info('📦 Object deleted from localStorage (Supabase unavailable)')
       }
 
       // Remove from local state
@@ -249,38 +228,26 @@ export default function MainPage({ onDepartmentSelect }: MainPageProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('objects')
-        .update({
-          name: newObjectData.name,
-          customer: newObjectData.customer,
-          address: newObjectData.address,
-          corpus_count: newObjectData.buildingsCount,
-          photo_url: selectedImage || null
-        })
-        .eq('id', editingObjectId)
-        .select()
-        .single()
+      const { data, error, usingFallback } = await objectStorage.update(editingObjectId, {
+        name: newObjectData.name,
+        customer: newObjectData.customer,
+        address: newObjectData.address,
+        buildingsCount: newObjectData.buildingsCount,
+        image: selectedImage || undefined
+      })
 
       if (error) {
         console.error('Error updating object:', error)
-        alert('Ошибка обновления объекта: ' + error.message)
+        alert('Ошибка обновления объекта')
         return
       }
 
+      if (usingFallback) {
+        console.info('📦 Object updated in localStorage (Supabase unavailable)')
+      }
+
       if (data) {
-        // Update object in local state
-        const updatedObject: ProjectObject = {
-          id: data.id,
-          name: data.name,
-          customer: data.customer || '',
-          address: data.address || '',
-          buildingsCount: data.corpus_count || 1,
-          image: data.photo_url || undefined,
-          createdAt: new Date(data.created_at),
-          updatedAt: new Date(data.updated_at)
-        }
-        setObjects(objects.map(obj => obj.id === editingObjectId ? updatedObject : obj))
+        setObjects(objects.map(obj => obj.id === editingObjectId ? data : obj))
       }
 
       // Reset form
