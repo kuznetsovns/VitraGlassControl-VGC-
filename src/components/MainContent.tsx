@@ -71,7 +71,7 @@ export default function MainContent({ activeSection, onSectionChange, onDepartme
       case 'defect-tracking':
         return (
           <div className="content-section">
-            <DefectTracking />
+            <DefectTracking selectedObject={selectedObject} />
           </div>
         )
 

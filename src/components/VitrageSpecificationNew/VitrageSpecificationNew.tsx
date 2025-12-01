@@ -240,12 +240,22 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
     }
   };
 
-  const handleExportData = () => {
-    if (filteredVitrages.length === 0) {
-      alert('Нет данных для экспорта');
-      return;
-    }
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // Закрытие меню при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (showExportMenu && !target.closest('.export-dropdown')) {
+        setShowExportMenu(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showExportMenu]);
+
+  const exportVitrages = (vitragesToExport: VitrageItem[], filename: string) => {
     // Создаем CSV данные
     let csvContent = '\uFEFF'; // BOM для правильного отображения кириллицы в Excel
 
@@ -253,7 +263,7 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
     csvContent += 'Витраж;Объект;Версия;Начальник участка;Дата создания;Сетка;Сегментов;Площадь (м²);Обозначение;Тип заполнения;Длина (мм);Ширина (мм);Площадь сегмента (м²);Формула стекла\n';
 
     // Данные
-    filteredVitrages.forEach(vitrage => {
+    vitragesToExport.forEach(vitrage => {
       const objectName = getObjectName(vitrage);
       const versionName = getVersionName(vitrage);
       const siteManager = vitrage.siteManager || '—';
@@ -279,12 +289,34 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `specification_vitrages_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', filename);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleExportAll = () => {
+    if (filteredVitrages.length === 0) {
+      alert('Нет данных для экспорта');
+      return;
+    }
+    exportVitrages(filteredVitrages, `specification_all_vitrages_${new Date().toISOString().split('T')[0]}.csv`);
+    setShowExportMenu(false);
+  };
+
+  const handleExportSelected = () => {
+    if (!selectedVitrageForDetails) {
+      alert('Выберите витраж для экспорта');
+      return;
+    }
+    exportVitrages([selectedVitrageForDetails], `specification_${selectedVitrageForDetails.name}_${new Date().toISOString().split('T')[0]}.csv`);
+    setShowExportMenu(false);
+  };
+
+  const handleExportData = () => {
+    setShowExportMenu(!showExportMenu);
   };
 
   return (
@@ -302,14 +334,34 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
                 <span className="object-info-name">{selectedObject.name}</span>
               </div>
             )}
-            <button
-              className="export-data-btn"
-              onClick={handleExportData}
-              disabled={filteredVitrages.length === 0}
-              title="Экспортировать данные в CSV"
-            >
-              📊 Экспорт данных
-            </button>
+            <div className="export-dropdown">
+              <button
+                className="export-data-btn"
+                onClick={handleExportData}
+                disabled={filteredVitrages.length === 0}
+                title="Экспортировать данные в CSV"
+              >
+                📊 Экспорт данных ▾
+              </button>
+              {showExportMenu && (
+                <div className="export-menu">
+                  <button
+                    className="export-menu-item"
+                    onClick={handleExportAll}
+                  >
+                    📋 Экспортировать все витражи ({filteredVitrages.length})
+                  </button>
+                  <button
+                    className="export-menu-item"
+                    onClick={handleExportSelected}
+                    disabled={!selectedVitrageForDetails}
+                  >
+                    📄 Экспортировать выбранный витраж
+                    {selectedVitrageForDetails && ` (${selectedVitrageForDetails.name})`}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

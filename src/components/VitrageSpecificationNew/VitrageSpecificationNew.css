@@ -108,6 +108,10 @@
   cursor: not-allowed;
 }
 
+.export-dropdown {
+  position: relative;
+}
+
 .export-data-btn {
   padding: 8px 16px;
   font-size: 14px;
@@ -127,6 +131,48 @@
 .export-data-btn:hover:not(:disabled) {
   background: #218838;
   transform: translateY(-1px);
+}
+
+.export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.export-menu-item {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.export-menu-item:hover:not(:disabled) {
+  background: #f8f9fa;
+}
+
+.export-menu-item:disabled {
+  color: #adb5bd;
+  cursor: not-allowed;
+}
+
+.export-menu-item:not(:last-child) {
+  border-bottom: 1px solid #e9ecef;
 }
 
 .export-data-btn:active:not(:disabled) {

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './DefectTracking.css';
+import { vitrageStorage } from '../../services/vitrageStorage';
+import { defectStorage, type SegmentDefectData } from '../../services/defectStorage';
 
 interface ProjectObject {
   id: string;
@@ -45,19 +47,14 @@ interface VitrageSegment {
   mergedInto?: number;
 }
 
-interface SegmentDefectData {
-  segmentId: string;
-  inspectionDate: string;
-  inspector: string;
-  siteManager: string;
-  defects: string[];
+
+
+interface DefectTrackingProps {
+  selectedObject?: { id: string; name: string } | null;
 }
 
-
-export default function DefectTracking() {
+export default function DefectTracking({ selectedObject }: DefectTrackingProps) {
   const [objects, setObjects] = useState<ProjectObject[]>([]);
-  const [selectedObject, setSelectedObject] = useState('');
-  const [selectedVersion, setSelectedVersion] = useState('');
   const [vitrages, setVitrages] = useState<VitrageItem[]>([]);
   const [filteredVitrages, setFilteredVitrages] = useState<VitrageItem[]>([]);
   const [selectedVitrageForView, setSelectedVitrageForView] = useState<VitrageItem | null>(null);
@@ -92,57 +89,63 @@ export default function DefectTracking() {
 
   // Хранилище данных дефектов по сегментам (ключ: vitrageId-segmentId)
   const [segmentDefectsData, setSegmentDefectsData] = useState<Map<string, SegmentDefectData>>(new Map());
+  const [storageSource, setStorageSource] = useState<'supabase' | 'localStorage'>('localStorage');
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
-  // Загрузка объектов и витражей
+  // Загрузка объектов, витражей и дефектов
   useEffect(() => {
     const loadedObjects = localStorage.getItem('project-objects');
     if (loadedObjects) {
       setObjects(JSON.parse(loadedObjects));
     }
 
-    const savedVitrages = localStorage.getItem('saved-vitrages');
-    if (savedVitrages) {
+    // Загрузка витражей через сервис
+    const loadVitrages = async () => {
       try {
-        const parsed = JSON.parse(savedVitrages);
-        setVitrages(parsed.map((v: VitrageItem) => ({
-          ...v,
-          createdAt: new Date(v.createdAt)
-        })));
+        const { data, source } = await vitrageStorage.getAll();
+        setVitrages(data as VitrageItem[]);
+        setStorageSource(source);
+        console.log(`📋 Витражи загружены из ${source}:`, data.length);
       } catch (error) {
         console.error('Ошибка при загрузке витражей:', error);
       }
-    }
+    };
 
-    // Загрузка сохраненных данных о дефектах сегментов
-    const savedDefectsData = localStorage.getItem('segment-defects-data');
-    if (savedDefectsData) {
+    // Загрузка типов дефектов через сервис
+    const loadDefectTypes = async () => {
       try {
-        const parsed = JSON.parse(savedDefectsData);
-        const newMap = new Map<string, SegmentDefectData>();
-        Object.entries(parsed).forEach(([key, value]) => {
-          newMap.set(key, value as SegmentDefectData);
-        });
-        setSegmentDefectsData(newMap);
+        const { data } = await defectStorage.getDefectTypes();
+        setAvailableDefects(data.map(d => d.name));
+      } catch (error) {
+        console.error('Ошибка при загрузке типов дефектов:', error);
+      }
+    };
+
+    // Загрузка данных о дефектах через сервис
+    const loadDefectsData = async () => {
+      try {
+        const { data } = await defectStorage.getAll();
+        setSegmentDefectsData(data);
       } catch (error) {
         console.error('Ошибка при загрузке данных дефектов:', error);
       }
-    }
+    };
+
+    loadVitrages();
+    loadDefectTypes();
+    loadDefectsData();
   }, []);
 
-  // Фильтрация витражей по объекту и версии
+  // Фильтрация витражей по выбранному объекту
   useEffect(() => {
     let filtered = vitrages;
 
     if (selectedObject) {
-      filtered = filtered.filter(v => v.objectId === selectedObject);
-    }
-
-    if (selectedVersion) {
-      filtered = filtered.filter(v => v.versionId === selectedVersion);
+      filtered = filtered.filter(v => v.objectId === selectedObject.id);
     }
 
     setFilteredVitrages(filtered);
-  }, [selectedObject, selectedVersion, vitrages]);
+  }, [selectedObject, vitrages]);
 
   // Обработка кликов по сегментам SVG
   useEffect(() => {
@@ -388,42 +391,167 @@ export default function DefectTracking() {
     );
   };
 
-  const handleAddNewDefect = () => {
+  const handleAddNewDefect = async () => {
     if (newDefectName.trim() && !availableDefects.includes(newDefectName.trim())) {
-      setAvailableDefects(prev => [...prev, newDefectName.trim()]);
-      setSelectedDefects(prev => [...prev, newDefectName.trim()]);
-      setNewDefectName('');
-      setShowAddDefectForm(false);
+      try {
+        await defectStorage.addDefectType(newDefectName.trim());
+        setAvailableDefects(prev => [...prev, newDefectName.trim()]);
+        setSelectedDefects(prev => [...prev, newDefectName.trim()]);
+        setNewDefectName('');
+        setShowAddDefectForm(false);
+      } catch (error) {
+        console.error('Ошибка при добавлении типа дефекта:', error);
+      }
     }
   };
 
-  const handleSaveSegmentDefects = () => {
+  const handleSaveSegmentDefects = async () => {
     if (!selectedSegmentId || !selectedVitrageForView) return;
 
     const key = `${selectedVitrageForView.id}-${selectedSegmentId}`;
-    const newData: SegmentDefectData = {
-      segmentId: selectedSegmentId,
-      inspectionDate,
-      inspector,
-      siteManager,
-      defects: selectedDefects
+    const segmentIndex = parseInt(selectedSegmentId);
+
+    try {
+      // Сохраняем через сервис (Supabase или localStorage)
+      const { source } = await defectStorage.saveSegmentDefects(
+        selectedVitrageForView.id,
+        segmentIndex,
+        {
+          inspectionDate,
+          inspector,
+          siteManager,
+          defects: selectedDefects
+        }
+      );
+
+      // Обновляем локальное состояние
+      const newData: SegmentDefectData = {
+        vitrageId: selectedVitrageForView.id,
+        segmentIndex,
+        inspectionDate,
+        inspector,
+        siteManager,
+        defects: selectedDefects
+      };
+
+      setSegmentDefectsData(prev => {
+        const newMap = new Map(prev);
+        newMap.set(key, newData);
+        return newMap;
+      });
+
+      const storageInfo = source === 'supabase'
+        ? '☁️ Сохранено в облаке'
+        : '📦 Сохранено локально';
+
+      alert(`Данные сегмента сохранены!\n${storageInfo}`);
+    } catch (error) {
+      console.error('Ошибка при сохранении дефектов:', error);
+      alert('Произошла ошибка при сохранении данных');
+    }
+  };
+
+  // Закрытие меню экспорта при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (showExportMenu && !target.closest('.export-dropdown')) {
+        setShowExportMenu(false);
+      }
     };
 
-    setSegmentDefectsData(prev => {
-      const newMap = new Map(prev);
-      newMap.set(key, newData);
-      return newMap;
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showExportMenu]);
+
+  // Функция экспорта данных о дефектах в Excel (CSV)
+  const exportDefectsToExcel = (vitragesToExport: VitrageItem[], filename: string) => {
+    // Создаем CSV данные с BOM для правильного отображения кириллицы в Excel
+    let csvContent = '\uFEFF';
+
+    // Заголовок
+    csvContent += 'Витраж;Объект;Начальник участка;Дата создания витража;Сетка;Номер сегмента;Тип сегмента;Ширина (мм);Высота (мм);Формула стекла;Дата осмотра;Проверяющий;Начальник участка (осмотр);Дефекты\n';
+
+    // Данные
+    vitragesToExport.forEach(vitrage => {
+      const objectName = getObjectName(vitrage);
+      const grid = `${vitrage.rows} × ${vitrage.cols}`;
+
+      vitrage.segments.forEach((segment, idx) => {
+        const segmentIndex = idx + 1;
+        const key = `${vitrage.id}-${segmentIndex}`;
+        const defectData = segmentDefectsData.get(key);
+
+        const segmentType = segment.type || 'Не указан';
+        const segmentWidth = segment.width || '—';
+        const segmentHeight = segment.height || '—';
+        const segmentFormula = segment.formula || '—';
+
+        // Данные осмотра
+        const inspDate = defectData?.inspectionDate || '—';
+        const insp = defectData?.inspector || '—';
+        const siteMgr = defectData?.siteManager || '—';
+        const defects = defectData?.defects?.length > 0 ? defectData.defects.join(', ') : 'Нет дефектов';
+
+        csvContent += `${vitrage.name};${objectName};${vitrage.siteManager || '—'};${vitrage.creationDate || '—'};${grid};${segmentIndex};${segmentType};${segmentWidth};${segmentHeight};${segmentFormula};${inspDate};${insp};${siteMgr};${defects}\n`;
+      });
     });
 
-    // Сохраняем в localStorage
-    const dataToSave: { [key: string]: SegmentDefectData } = {};
-    segmentDefectsData.forEach((value, key) => {
-      dataToSave[key] = value;
-    });
-    dataToSave[key] = newData;
-    localStorage.setItem('segment-defects-data', JSON.stringify(dataToSave));
+    // Создаем Blob и скачиваем файл
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
 
-    alert('Данные сегмента сохранены!');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportAll = () => {
+    if (filteredVitrages.length === 0) {
+      alert('Нет данных для экспорта');
+      return;
+    }
+    const date = new Date().toISOString().split('T')[0];
+    exportDefectsToExcel(filteredVitrages, `defects_all_vitrages_${date}.csv`);
+    setShowExportMenu(false);
+  };
+
+  const handleExportSelected = () => {
+    if (!selectedVitrageForView) {
+      alert('Выберите витраж для экспорта');
+      return;
+    }
+    const date = new Date().toISOString().split('T')[0];
+    exportDefectsToExcel([selectedVitrageForView], `defects_${selectedVitrageForView.name}_${date}.csv`);
+    setShowExportMenu(false);
+  };
+
+  const handleExportOnlyWithDefects = () => {
+    // Экспортировать только витражи с дефектами
+    const vitragesWithDefects = filteredVitrages.filter(vitrage => {
+      for (let i = 0; i < vitrage.segments.length; i++) {
+        const key = `${vitrage.id}-${i + 1}`;
+        const defectData = segmentDefectsData.get(key);
+        if (defectData?.defects?.length > 0) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (vitragesWithDefects.length === 0) {
+      alert('Нет витражей с дефектами для экспорта');
+      return;
+    }
+
+    const date = new Date().toISOString().split('T')[0];
+    exportDefectsToExcel(vitragesWithDefects, `defects_with_issues_${date}.csv`);
+    setShowExportMenu(false);
   };
 
   const handleKeyPressInspection = (e: React.KeyboardEvent<HTMLInputElement>, nextInputId?: string) => {
@@ -756,37 +884,48 @@ export default function DefectTracking() {
         <div className="defect-header">
           <h2>Дефектовка</h2>
           <div className="header-filters">
-            <div className="filter-group">
-              <label htmlFor="object-filter">Объект:</label>
-              <select
-                id="object-filter"
-                value={selectedObject}
-                onChange={(e) => {
-                  setSelectedObject(e.target.value);
-                  setSelectedVersion('');
-                }}
-                className="filter-select"
-              >
-                <option value="">Все объекты</option>
-                {objects.map(obj => (
-                  <option key={obj.id} value={obj.id}>{obj.name}</option>
-                ))}
-              </select>
+            <div className="storage-indicator" title={storageSource === 'supabase' ? 'Данные из облака (Supabase)' : 'Локальные данные (localStorage)'}>
+              {storageSource === 'supabase' ? '☁️' : '📦'}
             </div>
-            <div className="filter-group">
-              <label htmlFor="version-filter">Версия:</label>
-              <select
-                id="version-filter"
-                value={selectedVersion}
-                onChange={(e) => setSelectedVersion(e.target.value)}
-                className="filter-select"
-                disabled={!selectedObject}
+            {selectedObject && (
+              <div className="object-info-badge">
+                <span className="object-info-label">Объект:</span>
+                <span className="object-info-name">{selectedObject.name}</span>
+              </div>
+            )}
+            <div className="export-dropdown">
+              <button
+                className="export-data-btn"
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                disabled={filteredVitrages.length === 0}
+                title="Экспортировать данные о дефектах в Excel"
               >
-                <option value="">Все версии</option>
-                {selectedObject && objects.find(obj => obj.id === selectedObject)?.versions.map(ver => (
-                  <option key={ver.id} value={ver.id}>{ver.name}</option>
-                ))}
-              </select>
+                📊 Экспорт данных ▾
+              </button>
+              {showExportMenu && (
+                <div className="export-menu">
+                  <button
+                    className="export-menu-item"
+                    onClick={handleExportAll}
+                  >
+                    📋 Все витражи ({filteredVitrages.length})
+                  </button>
+                  <button
+                    className="export-menu-item"
+                    onClick={handleExportOnlyWithDefects}
+                  >
+                    ⚠️ Только с дефектами
+                  </button>
+                  <button
+                    className="export-menu-item"
+                    onClick={handleExportSelected}
+                    disabled={!selectedVitrageForView}
+                  >
+                    📄 Выбранный витраж
+                    {selectedVitrageForView && ` (${selectedVitrageForView.name})`}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
