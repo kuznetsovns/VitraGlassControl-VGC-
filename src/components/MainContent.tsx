@@ -13,9 +13,10 @@ export interface ContentSectionProps {
   activeSection: string
   onSectionChange?: (section: string) => void
   onDepartmentSelect?: (department: Department, objectId: string, objectName: string) => void
+  selectedObject?: { id: string; name: string } | null
 }
 
-export default function MainContent({ activeSection, onSectionChange, onDepartmentSelect }: ContentSectionProps) {
+export default function MainContent({ activeSection, onSectionChange, onDepartmentSelect, selectedObject }: ContentSectionProps) {
   const renderContent = () => {
     switch (activeSection) {
       case 'main':
@@ -49,14 +50,14 @@ export default function MainContent({ activeSection, onSectionChange, onDepartme
       case 'vitrage-visualizer':
         return (
           <div className="content-section">
-            <VitrageVisualizer />
+            <VitrageVisualizer selectedObject={selectedObject} />
           </div>
         )
 
       case 'specification-new':
         return (
           <div className="content-section">
-            <VitrageSpecificationNew />
+            <VitrageSpecificationNew selectedObject={selectedObject} />
           </div>
         )
 

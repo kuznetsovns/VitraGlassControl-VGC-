@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import './VitrageVisualizer.css';
+import { vitrageStorage } from '../../services/vitrageStorage';
 
-// Интерфейсы для структур данных
+// Интерфейсы для структур данных витража
 interface Segment {
   id: string;
   row: number;
@@ -76,22 +77,11 @@ function recalculateAllPositions(segments: Segment[][], rows: number, cols: numb
   };
 }
 
-export default function VitrageVisualizer() {
-  // Загрузка объектов из localStorage
-  const loadObjects = (): ProjectObject[] => {
-    const saved = localStorage.getItem('project-objects');
-    return saved ? JSON.parse(saved) : [];
-  };
+interface VitrageVisualizerProps {
+  selectedObject?: { id: string; name: string } | null;
+}
 
-  const [objects, setObjects] = useState<ProjectObject[]>(loadObjects());
-  const [selectedObject, setSelectedObject] = useState('');
-  const [selectedVersion, setSelectedVersion] = useState('');
-  const [showObjectModal, setShowObjectModal] = useState(false);
-  const [showVersionModal, setShowVersionModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
-  const [newObjectName, setNewObjectName] = useState('');
-  const [newVersionName, setNewVersionName] = useState('');
+export default function VitrageVisualizer({ selectedObject }: VitrageVisualizerProps) {
   const [vitrageName, setVitrageName] = useState('');
   const [siteManager, setSiteManager] = useState('');
   const [creationDate, setCreationDate] = useState('');
@@ -167,91 +157,12 @@ export default function VitrageVisualizer() {
   const heightRef = useRef<HTMLInputElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Сохранение объектов в localStorage
-  useEffect(() => {
-    localStorage.setItem('project-objects', JSON.stringify(objects));
-  }, [objects]);
-
   // Автофокус на первом поле при открытии панели свойств
   useEffect(() => {
     if (selectedSegment !== null) {
       typeRef.current?.focus();
     }
   }, [selectedSegment]);
-
-  // Функции управления объектами
-  const handleAddObject = () => {
-    if (!newObjectName.trim()) {
-      alert('Введите название объекта');
-      return;
-    }
-
-    const newObject: ProjectObject = {
-      id: Date.now().toString(),
-      name: newObjectName,
-      versions: [{
-        id: Date.now().toString(),
-        name: 'Версия 1.0',
-        createdAt: new Date()
-      }],
-      createdAt: new Date()
-    };
-
-    setObjects([...objects, newObject]);
-    setNewObjectName('');
-    setShowObjectModal(false);
-    setSelectedObject(newObject.id);
-    setSelectedVersion(newObject.versions[0].id);
-  };
-
-  const handleEditObject = () => {
-    if (!newObjectName.trim() || !editingObjectId) {
-      alert('Введите название объекта');
-      return;
-    }
-
-    setObjects(objects.map(obj =>
-      obj.id === editingObjectId
-        ? { ...obj, name: newObjectName }
-        : obj
-    ));
-
-    setNewObjectName('');
-    setEditingObjectId(null);
-    setShowEditModal(false);
-  };
-
-  const handleAddVersion = () => {
-    if (!newVersionName.trim() || !selectedObject) {
-      alert('Введите название версии');
-      return;
-    }
-
-    const newVersion: ObjectVersion = {
-      id: Date.now().toString(),
-      name: newVersionName,
-      createdAt: new Date()
-    };
-
-    setObjects(objects.map(obj =>
-      obj.id === selectedObject
-        ? { ...obj, versions: [...obj.versions, newVersion] }
-        : obj
-    ));
-
-    setNewVersionName('');
-    setShowVersionModal(false);
-    setSelectedVersion(newVersion.id);
-  };
-
-  const openEditModal = (objectId: string) => {
-    const obj = objects.find(o => o.id === objectId);
-    if (obj) {
-      setEditingObjectId(objectId);
-      setNewObjectName(obj.name);
-      setShowEditModal(true);
-    }
-  };
 
   const handleVitrageNameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -455,15 +366,15 @@ export default function VitrageVisualizer() {
     return svgContent;
   };
 
-  const handleSaveVitrage = () => {
+  const handleSaveVitrage = async () => {
     if (!createdVitrage) {
       console.error('Витраж не создан');
       return;
     }
 
-    // Проверяем, что выбраны объект и версия
-    if (!selectedObject || !selectedVersion) {
-      alert('Пожалуйста, выберите объект и версию перед сохранением витража');
+    // Проверяем, что объект выбран (передан через пропсы)
+    if (!selectedObject) {
+      alert('Объект не выбран. Пожалуйста, выберите объект на главной странице.');
       return;
     }
 
@@ -495,35 +406,34 @@ export default function VitrageVisualizer() {
       console.log('SVG сгенерирован, длина:', svgDrawing.length);
 
       const vitrageData = {
-        id: Date.now().toString(),
         name: createdVitrage.name,
         siteManager: createdVitrage.siteManager,
         creationDate: createdVitrage.creationDate,
-        objectId: selectedObject,
-        versionId: selectedVersion,
+        objectId: selectedObject.id,
+        objectName: selectedObject.name,
         rows: rows,
         cols: cols,
         segments: segments,
+        segmentProperties: segmentProperties,
         totalWidth: 600,
         totalHeight: 400,
-        svgDrawing: svgDrawing, // Сохраняем SVG
-        createdAt: new Date()
+        svgDrawing: svgDrawing,
       };
 
       console.log('Данные витража:', vitrageData);
 
-      // Сохраняем в localStorage для спецификации
-      const existingVitrages = localStorage.getItem('saved-vitrages');
-      const vitrages = existingVitrages ? JSON.parse(existingVitrages) : [];
-      vitrages.push(vitrageData);
-      localStorage.setItem('saved-vitrages', JSON.stringify(vitrages));
+      // Сохраняем через сервис (Supabase с fallback на localStorage)
+      const { data: savedVitrage, source } = await vitrageStorage.create(vitrageData);
 
-      console.log('Витраж сохранён в localStorage');
+      if (savedVitrage) {
+        const storageInfo = source === 'supabase'
+          ? '☁️ Сохранено в облаке (Supabase)'
+          : '📦 Сохранено локально (localStorage)';
 
-      const objectName = objects.find(o => o.id === selectedObject)?.name || '';
-      const versionName = objects.find(o => o.id === selectedObject)?.versions.find(v => v.id === selectedVersion)?.name || '';
-
-      alert(`Витраж "${createdVitrage.name}" успешно сохранён!\n\nПараметры:\n- Объект: ${objectName}\n- Версия: ${versionName}\n- Сетка: ${createdVitrage.horizontal} × ${createdVitrage.vertical}\n- Всего сегментов: ${createdVitrage.horizontal * createdVitrage.vertical}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Спецификация Витражей"`);
+        alert(`Витраж "${createdVitrage.name}" успешно сохранён!\n\n${storageInfo}\n\nПараметры:\n- Объект: ${selectedObject.name}\n- Сетка: ${createdVitrage.horizontal} × ${createdVitrage.vertical}\n- Всего сегментов: ${createdVitrage.horizontal * createdVitrage.vertical}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Спецификация Витражей"`);
+      } else {
+        throw new Error('Не удалось сохранить витраж');
+      }
     } catch (error) {
       console.error('Ошибка при сохранении витража:', error);
       alert('Произошла ошибка при сохранении витража. Проверьте консоль для деталей.');
@@ -1384,154 +1294,13 @@ export default function VitrageVisualizer() {
     <div className="vitrage-visualizer">
       <div className="visualizer-header">
         <h2>Визуализатор Витража</h2>
-        <div className="header-selectors">
-          <div className="selector-group">
-            <label htmlFor="object-select">Объект:</label>
-            <div className="select-with-buttons">
-              <select
-                id="object-select"
-                value={selectedObject}
-                onChange={(e) => {
-                  setSelectedObject(e.target.value);
-                  setSelectedVersion('');
-                }}
-                className="header-select"
-              >
-                <option value="">Выберите объект</option>
-                {objects.map(obj => (
-                  <option key={obj.id} value={obj.id}>{obj.name}</option>
-                ))}
-              </select>
-              <button
-                className="action-icon-btn"
-                onClick={() => setShowObjectModal(true)}
-                title="Добавить объект"
-              >
-                +
-              </button>
-              {selectedObject && (
-                <button
-                  className="action-icon-btn edit-btn"
-                  onClick={() => openEditModal(selectedObject)}
-                  title="Редактировать объект"
-                >
-                  ✎
-                </button>
-              )}
-            </div>
+        {selectedObject && (
+          <div className="object-info-badge">
+            <span className="object-info-label">Объект:</span>
+            <span className="object-info-name">{selectedObject.name}</span>
           </div>
-          <div className="selector-group">
-            <label htmlFor="version-select">Версия:</label>
-            <div className="select-with-buttons">
-              <select
-                id="version-select"
-                value={selectedVersion}
-                onChange={(e) => setSelectedVersion(e.target.value)}
-                className="header-select"
-                disabled={!selectedObject}
-              >
-                <option value="">Выберите версию</option>
-                {selectedObject && objects.find(obj => obj.id === selectedObject)?.versions.map(ver => (
-                  <option key={ver.id} value={ver.id}>{ver.name}</option>
-                ))}
-              </select>
-              <button
-                className="action-icon-btn"
-                onClick={() => setShowVersionModal(true)}
-                disabled={!selectedObject}
-                title="Добавить версию"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-
-      {/* Модальное окно добавления объекта */}
-      {showObjectModal && (
-        <div className="modal-overlay" onClick={() => setShowObjectModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Добавить объект</h3>
-            <input
-              type="text"
-              value={newObjectName}
-              onChange={(e) => setNewObjectName(e.target.value)}
-              placeholder="Название объекта"
-              className="modal-input"
-              autoFocus
-            />
-            <div className="modal-buttons">
-              <button className="modal-btn cancel-btn" onClick={() => {
-                setShowObjectModal(false);
-                setNewObjectName('');
-              }}>
-                Отмена
-              </button>
-              <button className="modal-btn confirm-btn" onClick={handleAddObject}>
-                Добавить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Модальное окно редактирования объекта */}
-      {showEditModal && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Редактировать объект</h3>
-            <input
-              type="text"
-              value={newObjectName}
-              onChange={(e) => setNewObjectName(e.target.value)}
-              placeholder="Название объекта"
-              className="modal-input"
-              autoFocus
-            />
-            <div className="modal-buttons">
-              <button className="modal-btn cancel-btn" onClick={() => {
-                setShowEditModal(false);
-                setNewObjectName('');
-                setEditingObjectId(null);
-              }}>
-                Отмена
-              </button>
-              <button className="modal-btn confirm-btn" onClick={handleEditObject}>
-                Сохранить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Модальное окно добавления версии */}
-      {showVersionModal && (
-        <div className="modal-overlay" onClick={() => setShowVersionModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Добавить версию</h3>
-            <input
-              type="text"
-              value={newVersionName}
-              onChange={(e) => setNewVersionName(e.target.value)}
-              placeholder="Название версии"
-              className="modal-input"
-              autoFocus
-            />
-            <div className="modal-buttons">
-              <button className="modal-btn cancel-btn" onClick={() => {
-                setShowVersionModal(false);
-                setNewVersionName('');
-              }}>
-                Отмена
-              </button>
-              <button className="modal-btn confirm-btn" onClick={handleAddVersion}>
-                Добавить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="config-panel">
         <h3>Конфигурация витража</h3>

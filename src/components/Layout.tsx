@@ -190,6 +190,7 @@ export default function Layout() {
             activeSection={activeMenuItem}
             onSectionChange={setActiveMenuItem}
             onDepartmentSelect={handleDepartmentSelect}
+            selectedObject={selectedObject}
           />
         </div>
       </main>

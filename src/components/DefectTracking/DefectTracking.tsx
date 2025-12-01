@@ -20,7 +20,8 @@ interface VitrageItem {
   siteManager?: string;
   creationDate?: string;
   objectId: string;
-  versionId: string;
+  objectName?: string;
+  versionId?: string;
   rows: number;
   cols: number;
   totalWidth: number;
@@ -318,15 +319,27 @@ export default function DefectTracking() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSegmentId, selectedVitrageForView?.id, segmentDefectsData.size]);
 
-  const getObjectName = (objectId: string) => {
-    const obj = objects.find(o => o.id === objectId);
+  const getObjectName = (vitrage: VitrageItem) => {
+    // Сначала проверяем objectName (новый формат)
+    if (vitrage.objectName) {
+      return vitrage.objectName;
+    }
+    // Затем ищем в списке объектов (старый формат)
+    const obj = objects.find(o => o.id === vitrage.objectId);
     return obj?.name || 'Неизвестный объект';
   };
 
-  const getVersionName = (objectId: string, versionId: string) => {
-    const obj = objects.find(o => o.id === objectId);
-    const version = obj?.versions.find(v => v.id === versionId);
-    return version?.name || 'Неизвестная версия';
+  const getVersionName = (vitrage: VitrageItem) => {
+    // Если нет versionId, возвращаем пустую строку
+    if (!vitrage.versionId) {
+      return '';
+    }
+    const obj = objects.find(o => o.id === vitrage.objectId);
+    if (!obj?.versions) {
+      return '';
+    }
+    const version = obj.versions.find(v => v.id === vitrage.versionId);
+    return version?.name || '';
   };
 
   const calculateTotalArea = (vitrage: VitrageItem): number => {
@@ -801,12 +814,14 @@ export default function DefectTracking() {
                 <div className="vitrage-card-info">
                   <div className="info-row">
                     <span className="info-label">Объект:</span>
-                    <span className="info-value">{getObjectName(vitrage.objectId)}</span>
+                    <span className="info-value">{getObjectName(vitrage)}</span>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Версия:</span>
-                    <span className="info-value">{getVersionName(vitrage.objectId, vitrage.versionId)}</span>
-                  </div>
+                  {getVersionName(vitrage) && (
+                    <div className="info-row">
+                      <span className="info-label">Версия:</span>
+                      <span className="info-value">{getVersionName(vitrage)}</span>
+                    </div>
+                  )}
                   {vitrage.siteManager && (
                     <div className="info-row">
                       <span className="info-label">Начальник участка:</span>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import './VitrageSpecificationNew.css';
+import { vitrageStorage, segmentStorage, type Vitrage, type VitrageSegment } from '../../services/vitrageStorage';
 
 interface ProjectObject {
   id: string;
@@ -14,40 +15,23 @@ interface ObjectVersion {
   createdAt: Date;
 }
 
-interface VitrageItem {
-  id: string;
-  name: string;
-  siteManager?: string;
-  creationDate?: string;
-  objectId: string;
-  versionId: string;
-  rows: number;
-  cols: number;
-  totalWidth: number;
-  totalHeight: number;
-  segments: VitrageSegment[];
-  svgDrawing?: string;
-  createdAt: Date;
+interface VitrageItem extends Vitrage {
+  versionId?: string;
 }
 
-interface VitrageSegment {
-  id: string;
-  type: string;
-  width?: number;
-  height?: number;
-  formula?: string;
-  label?: string;
+interface VitrageSpecificationNewProps {
+  selectedObject?: { id: string; name: string } | null;
 }
 
-export default function VitrageSpecificationNew() {
+export default function VitrageSpecificationNew({ selectedObject }: VitrageSpecificationNewProps) {
   const [objects, setObjects] = useState<ProjectObject[]>([]);
-  const [selectedObject, setSelectedObject] = useState('');
-  const [selectedVersion, setSelectedVersion] = useState('');
   const [vitrages, setVitrages] = useState<VitrageItem[]>([]);
   const [filteredVitrages, setFilteredVitrages] = useState<VitrageItem[]>([]);
   const [selectedVitrageForDetails, setSelectedVitrageForDetails] = useState<VitrageItem | null>(null);
   const [editingCell, setEditingCell] = useState<{ segmentIndex: number; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+
+  const [storageSource, setStorageSource] = useState<'supabase' | 'localStorage'>('localStorage');
 
   // Загрузка объектов и витражей
   useEffect(() => {
@@ -56,44 +40,53 @@ export default function VitrageSpecificationNew() {
       setObjects(JSON.parse(loadedObjects));
     }
 
-    const savedVitrages = localStorage.getItem('saved-vitrages');
-    if (savedVitrages) {
+    // Загружаем витражи через сервис (Supabase или localStorage)
+    const loadVitrages = async () => {
       try {
-        const parsed = JSON.parse(savedVitrages);
-        setVitrages(parsed.map((v: VitrageItem) => ({
-          ...v,
-          createdAt: new Date(v.createdAt)
-        })));
+        const { data, source } = await vitrageStorage.getAll();
+        setVitrages(data as VitrageItem[]);
+        setStorageSource(source);
+        console.log(`📋 Витражи загружены из ${source}:`, data.length);
       } catch (error) {
         console.error('Ошибка при загрузке витражей:', error);
       }
-    }
+    };
+
+    loadVitrages();
   }, []);
 
-  // Фильтрация витражей по объекту и версии
+  // Фильтрация витражей по выбранному объекту
   useEffect(() => {
     let filtered = vitrages;
 
     if (selectedObject) {
-      filtered = filtered.filter(v => v.objectId === selectedObject);
-    }
-
-    if (selectedVersion) {
-      filtered = filtered.filter(v => v.versionId === selectedVersion);
+      filtered = filtered.filter(v => v.objectId === selectedObject.id);
     }
 
     setFilteredVitrages(filtered);
-  }, [selectedObject, selectedVersion, vitrages]);
+  }, [selectedObject, vitrages]);
 
-  const getObjectName = (objectId: string) => {
-    const obj = objects.find(o => o.id === objectId);
+  const getObjectName = (vitrage: VitrageItem) => {
+    // Сначала проверяем objectName (новый формат)
+    if (vitrage.objectName) {
+      return vitrage.objectName;
+    }
+    // Затем ищем в списке объектов (старый формат)
+    const obj = objects.find(o => o.id === vitrage.objectId);
     return obj?.name || 'Неизвестный объект';
   };
 
-  const getVersionName = (objectId: string, versionId: string) => {
-    const obj = objects.find(o => o.id === objectId);
-    const version = obj?.versions.find(v => v.id === versionId);
-    return version?.name || 'Неизвестная версия';
+  const getVersionName = (vitrage: VitrageItem) => {
+    // Если нет versionId, возвращаем пустую строку
+    if (!vitrage.versionId) {
+      return '';
+    }
+    const obj = objects.find(o => o.id === vitrage.objectId);
+    if (!obj?.versions) {
+      return '';
+    }
+    const version = obj.versions.find(v => v.id === vitrage.versionId);
+    return version?.name || '';
   };
 
   const getTypeLabel = (type: string): string => {
@@ -147,27 +140,33 @@ export default function VitrageSpecificationNew() {
     }
   };
 
-  const handleCellBlur = () => {
+  const handleCellBlur = async () => {
     if (editingCell && selectedVitrageForDetails) {
       const updatedSegments = [...selectedVitrageForDetails.segments];
       const segment = updatedSegments[editingCell.segmentIndex];
 
       // Обновляем значение в зависимости от поля
+      const updates: Partial<VitrageSegment> = {};
       switch (editingCell.field) {
         case 'label':
           segment.label = editValue;
+          updates.label = editValue;
           break;
         case 'type':
           segment.type = editValue;
+          updates.type = editValue;
           break;
         case 'height':
           segment.height = editValue ? parseFloat(editValue) : undefined;
+          updates.height = editValue ? parseFloat(editValue) : undefined;
           break;
         case 'width':
           segment.width = editValue ? parseFloat(editValue) : undefined;
+          updates.width = editValue ? parseFloat(editValue) : undefined;
           break;
         case 'formula':
           segment.formula = editValue;
+          updates.formula = editValue;
           break;
       }
 
@@ -177,14 +176,31 @@ export default function VitrageSpecificationNew() {
         segments: updatedSegments
       };
 
-      // Сохраняем в localStorage
+      // Сохраняем изменения через сервис (Supabase или localStorage)
+      try {
+        // Обновляем сегмент в Supabase
+        await segmentStorage.updateByIndex(
+          selectedVitrageForDetails.id,
+          editingCell.segmentIndex,
+          updates
+        );
+
+        // Также обновляем весь витраж (для обновления segments в JSONB)
+        await vitrageStorage.update(selectedVitrageForDetails.id, {
+          segments: updatedSegments
+        });
+
+        console.log('✅ Сегмент обновлён');
+      } catch (error) {
+        console.error('Ошибка при обновлении сегмента:', error);
+      }
+
       const updatedVitrages = vitrages.map(v =>
         v.id === selectedVitrageForDetails.id ? updatedVitrage : v
       );
 
       setVitrages(updatedVitrages);
       setSelectedVitrageForDetails(updatedVitrage);
-      localStorage.setItem('saved-vitrages', JSON.stringify(updatedVitrages));
     }
 
     setEditingCell(null);
@@ -200,7 +216,7 @@ export default function VitrageSpecificationNew() {
     }
   };
 
-  const handleDeleteVitrage = () => {
+  const handleDeleteVitrage = async () => {
     if (!selectedVitrageForDetails) return;
 
     const confirmDelete = window.confirm(
@@ -208,10 +224,19 @@ export default function VitrageSpecificationNew() {
     );
 
     if (confirmDelete) {
-      const updatedVitrages = vitrages.filter(v => v.id !== selectedVitrageForDetails.id);
-      setVitrages(updatedVitrages);
-      localStorage.setItem('saved-vitrages', JSON.stringify(updatedVitrages));
-      setSelectedVitrageForDetails(null);
+      try {
+        // Удаляем через сервис (Supabase или localStorage)
+        await vitrageStorage.delete(selectedVitrageForDetails.id);
+
+        const updatedVitrages = vitrages.filter(v => v.id !== selectedVitrageForDetails.id);
+        setVitrages(updatedVitrages);
+        setSelectedVitrageForDetails(null);
+
+        console.log('✅ Витраж удалён');
+      } catch (error) {
+        console.error('Ошибка при удалении витража:', error);
+        alert('Произошла ошибка при удалении витража');
+      }
     }
   };
 
@@ -229,8 +254,8 @@ export default function VitrageSpecificationNew() {
 
     // Данные
     filteredVitrages.forEach(vitrage => {
-      const objectName = getObjectName(vitrage.objectId);
-      const versionName = getVersionName(vitrage.objectId, vitrage.versionId);
+      const objectName = getObjectName(vitrage);
+      const versionName = getVersionName(vitrage);
       const siteManager = vitrage.siteManager || '—';
       const creationDate = vitrage.creationDate || '—';
       const grid = `${vitrage.rows} × ${vitrage.cols}`;
@@ -268,38 +293,15 @@ export default function VitrageSpecificationNew() {
         <div className="specification-header">
           <h2>Спецификация Витражей</h2>
           <div className="header-filters">
-            <div className="filter-group">
-              <label htmlFor="object-filter">Объект:</label>
-              <select
-                id="object-filter"
-                value={selectedObject}
-                onChange={(e) => {
-                  setSelectedObject(e.target.value);
-                  setSelectedVersion('');
-                }}
-                className="filter-select"
-              >
-                <option value="">Все объекты</option>
-                {objects.map(obj => (
-                  <option key={obj.id} value={obj.id}>{obj.name}</option>
-                ))}
-              </select>
+            <div className="storage-indicator" title={storageSource === 'supabase' ? 'Данные из облака (Supabase)' : 'Локальные данные (localStorage)'}>
+              {storageSource === 'supabase' ? '☁️' : '📦'}
             </div>
-            <div className="filter-group">
-              <label htmlFor="version-filter">Версия:</label>
-              <select
-                id="version-filter"
-                value={selectedVersion}
-                onChange={(e) => setSelectedVersion(e.target.value)}
-                className="filter-select"
-                disabled={!selectedObject}
-              >
-                <option value="">Все версии</option>
-                {selectedObject && objects.find(obj => obj.id === selectedObject)?.versions.map(ver => (
-                  <option key={ver.id} value={ver.id}>{ver.name}</option>
-                ))}
-              </select>
-            </div>
+            {selectedObject && (
+              <div className="object-info-badge">
+                <span className="object-info-label">Объект:</span>
+                <span className="object-info-name">{selectedObject.name}</span>
+              </div>
+            )}
             <button
               className="export-data-btn"
               onClick={handleExportData}
@@ -334,12 +336,14 @@ export default function VitrageSpecificationNew() {
                 <div className="vitrage-card-info">
                   <div className="info-row">
                     <span className="info-label">Объект:</span>
-                    <span className="info-value">{getObjectName(vitrage.objectId)}</span>
+                    <span className="info-value">{getObjectName(vitrage)}</span>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Версия:</span>
-                    <span className="info-value">{getVersionName(vitrage.objectId, vitrage.versionId)}</span>
-                  </div>
+                  {getVersionName(vitrage) && (
+                    <div className="info-row">
+                      <span className="info-label">Версия:</span>
+                      <span className="info-value">{getVersionName(vitrage)}</span>
+                    </div>
+                  )}
                   {vitrage.siteManager && (
                     <div className="info-row">
                       <span className="info-label">Начальник участка:</span>
@@ -375,7 +379,7 @@ export default function VitrageSpecificationNew() {
             <div>
               <h3>{selectedVitrageForDetails.name}</h3>
               <p className="details-subtitle">
-                {getObjectName(selectedVitrageForDetails.objectId)} - {getVersionName(selectedVitrageForDetails.objectId, selectedVitrageForDetails.versionId)}
+                {getObjectName(selectedVitrageForDetails)}{getVersionName(selectedVitrageForDetails) ? ` - ${getVersionName(selectedVitrageForDetails)}` : ''}
               </p>
             </div>
             <button className="close-panel-btn" onClick={closeDetailsPanel}>
