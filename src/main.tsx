@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import './utils/testSupabase' // Import test utility
 import './utils/checkStorage' // Import storage check utility
+import './utils/testObjectCreation' // Import object creation test utility
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

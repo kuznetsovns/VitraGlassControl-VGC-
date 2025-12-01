@@ -129,6 +129,14 @@ interface PlacedVitrage {
 - **Russian UI**: Maintain Russian for all user-facing text
 - **Canvas modifications**: Study existing rendering code before changes
 - **Data model changes**: Test with fresh localStorage or provide migration
+- **File size limit**: Keep each file under 600 lines of code. If a file exceeds this limit, refactor by extracting logical parts into separate modules or components
+
+### Git Operations
+- **Always push to main**: When asked to push/commit changes to GitHub, ALWAYS use `origin/main` branch
+  - Use: `git push origin main` (not other branches)
+  - If on different branch, switch to main first: `git checkout main`
+  - Never create feature branches unless explicitly requested
+  - Default flow: `git add .` → `git commit -m "message"` → `git push origin main`
 
 ### Navigation
 - Use `navigate()` for programmatic navigation
