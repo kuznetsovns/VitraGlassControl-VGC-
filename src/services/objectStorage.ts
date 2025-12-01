@@ -111,21 +111,35 @@ const localStorageService = new LocalStorageService()
 export const objectStorage = {
   async getAll(): Promise<{ data: ProjectObject[], error: any, usingFallback: boolean }> {
     try {
+      console.log('🔄 Attempting to fetch objects from Supabase...')
+      console.log('📍 Supabase URL:', import.meta.env.VITE_SUPABASE_URL)
+
       const { data, error } = await supabase
         .from('objects')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Supabase error:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
+      }
 
+      console.log('✅ Successfully fetched from Supabase:', data?.length || 0, 'objects')
       return {
         data: data?.map(dbToProjectObject) || [],
         error: null,
         usingFallback: false
       }
     } catch (error) {
-      console.warn('Supabase unavailable, using localStorage fallback:', error)
+      console.warn('⚠️ Supabase unavailable, using localStorage fallback:', error)
       const data = await localStorageService.getAll()
+      console.log('📦 Using localStorage, found', data.length, 'objects')
       return { data, error: null, usingFallback: true }
     }
   },
@@ -154,23 +168,39 @@ export const objectStorage = {
 
   async create(objectData: Omit<ProjectObject, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ data: ProjectObject | null, error: any, usingFallback: boolean }> {
     try {
+      console.log('🆕 Creating object in Supabase...')
+      console.log('📝 Object data:', objectData)
+
       const dbData = projectObjectToDb(objectData)
+      console.log('🔄 Converted data for DB:', dbData)
+
       const { data, error } = await supabase
         .from('objects')
         .insert(dbData)
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Supabase INSERT error:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
+      }
 
+      console.log('✅ Successfully created in Supabase:', data)
       return {
         data: data ? dbToProjectObject(data) : null,
         error: null,
         usingFallback: false
       }
     } catch (error) {
-      console.warn('Supabase unavailable, using localStorage fallback:', error)
+      console.warn('⚠️ Supabase unavailable for CREATE, using localStorage fallback:', error)
       const data = await localStorageService.create(objectData)
+      console.log('📦 Created in localStorage:', data)
       return { data, error: null, usingFallback: true }
     }
   },
