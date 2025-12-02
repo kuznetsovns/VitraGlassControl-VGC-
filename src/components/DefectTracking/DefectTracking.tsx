@@ -24,12 +24,20 @@ export default function DefectTracking({ selectedObject }: DefectTrackingProps) 
     setSelectedVitrageForView(null)
   }
 
+  const handleSaveAndBack = async () => {
+    // Данные уже сохранены через saveSegmentData при каждом изменении
+    // Показываем уведомление и возвращаемся к списку
+    alert('Дефекты успешно сохранены!')
+    setSelectedVitrageForView(null)
+  }
+
   // Если выбран витраж для просмотра - показываем полноэкранную отрисовку
   if (selectedVitrageForView) {
     return (
       <DefectWorkspace
         vitrage={selectedVitrageForView}
         onBack={handleBackToList}
+        onSaveAndBack={handleSaveAndBack}
         availableDefects={defectData.availableDefects}
         segmentDefectsData={defectData.segmentDefectsData}
         loadSegmentData={defectData.loadSegmentData}
@@ -46,6 +54,7 @@ export default function DefectTracking({ selectedObject }: DefectTrackingProps) 
       objects={defectData.objects}
       selectedObject={selectedObject}
       storageSource={defectData.storageSource}
+      segmentDefectsData={defectData.segmentDefectsData}
       onVitrageClick={handleVitrageClick}
       showExportMenu={exportControls.showExportMenu}
       setShowExportMenu={exportControls.setShowExportMenu}

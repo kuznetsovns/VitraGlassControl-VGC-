@@ -36,7 +36,8 @@
       "Bash(start http://localhost:5176)",
       "Bash(npm install:*)",
       "Bash(npm uninstall:*)",
-      "Bash(git rebase:*)"
+      "Bash(git fetch:*)",
+      "Bash(start http://localhost:5173)"
     ],
     "deny": [],
     "ask": []

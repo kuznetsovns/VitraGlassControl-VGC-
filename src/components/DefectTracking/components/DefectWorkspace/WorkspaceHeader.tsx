@@ -3,7 +3,9 @@ import type { VitrageItem } from '../../types'
 interface WorkspaceHeaderProps {
   vitrage: VitrageItem
   zoom: number
+  hasDefects: boolean
   onBack: () => void
+  onSaveAndBack: () => void
   onZoomIn: () => void
   onZoomOut: () => void
   onResetZoom: () => void
@@ -12,7 +14,9 @@ interface WorkspaceHeaderProps {
 export function WorkspaceHeader({
   vitrage,
   zoom,
+  hasDefects,
   onBack,
+  onSaveAndBack,
   onZoomIn,
   onZoomOut,
   onResetZoom
@@ -33,6 +37,15 @@ export function WorkspaceHeader({
         <button className="action-btn back-btn" onClick={onBack} title="Вернуться к списку">
           <span className="btn-icon">←</span>
           <span className="btn-text">Назад к списку</span>
+        </button>
+
+        <button
+          className={`action-btn save-defects-btn ${hasDefects ? 'has-defects' : ''}`}
+          onClick={onSaveAndBack}
+          title="Сохранить дефекты и вернуться к списку"
+        >
+          <span className="btn-icon">💾</span>
+          <span className="btn-text">Сохранить дефекты</span>
         </button>
 
         <div className="zoom-controls">

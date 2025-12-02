@@ -3,6 +3,8 @@
   max-width: 100%;
   margin: 0 auto;
   position: relative;
+  display: flex;
+  gap: 30px;
   height: 100%;
   overflow: hidden;
 }
@@ -10,10 +12,15 @@
 .defect-tracking-fullscreen {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   background: #ffffff;
   overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .defect-tracking.with-panel {
@@ -21,7 +28,7 @@
   padding-right: 0;
 }
 
-.defect-tracking > *:not(.details-panel) {
+.defect-tracking > *:not(.defect-panel) {
   flex: 1;
   min-width: 600px;
   overflow-y: auto;
@@ -173,6 +180,15 @@
   box-shadow: 0 4px 16px rgba(74, 144, 226, 0.3);
 }
 
+.vitrage-card.has-defects {
+  border-color: #ff6b6b;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+}
+
+.vitrage-card.has-defects:hover {
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
+}
+
 .vitrage-card-header {
   display: flex;
   justify-content: space-between;
@@ -189,6 +205,12 @@
   margin: 0;
 }
 
+.vitrage-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .vitrage-badge {
   padding: 4px 12px;
   font-size: 12px;
@@ -196,6 +218,11 @@
   color: #4a90e2;
   background: rgba(74, 144, 226, 0.1);
   border-radius: 12px;
+}
+
+.vitrage-badge.defects-badge {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.15);
 }
 
 .vitrage-card-info {
@@ -408,6 +435,28 @@
   -ms-user-select: none;
 }
 
+/* Стили для интерактивных сегментов в SVG */
+.vitrage-segment {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.vitrage-segment:hover {
+  opacity: 0.8;
+}
+
+/* Выделенный сегмент */
+.vitrage-segment.selected {
+  stroke: #ff6b6b !important;
+  stroke-width: 4 !important;
+}
+
+/* Обычный сегмент (не выделенный) */
+.vitrage-segment:not(.selected) {
+  stroke: #87ceeb !important;
+  stroke-width: 2 !important;
+}
+
 /* Полноэкранный режим - заголовок workspace */
 .workspace-header {
   display: flex;
@@ -471,6 +520,40 @@
   transform: translateY(0);
 }
 
+.save-defects-btn {
+  background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+  color: #ffffff;
+}
+
+.save-defects-btn:hover {
+  background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.save-defects-btn:active {
+  transform: translateY(0);
+}
+
+.save-defects-btn.has-defects {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+  animation: pulse-defects 2s infinite;
+}
+
+.save-defects-btn.has-defects:hover {
+  background: linear-gradient(135deg, #ee5a5a 0%, #dc3545 100%);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+}
+
+@keyframes pulse-defects {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(255, 107, 107, 0.5);
+  }
+}
+
 .btn-icon {
   font-size: 16px;
 }
@@ -479,82 +562,99 @@
   white-space: nowrap;
 }
 
+/* Workspace container */
+.workspace-container {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace-container.with-panel {
+  padding-right: 0;
+}
+
+.workspace-container > *:not(.defect-panel) {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* Workspace layout */
 .workspace-layout {
   flex: 1;
   display: flex;
   overflow: hidden;
   background: #f8f9fa;
+  height: 100%;
 }
 
 .grid-visualization-workspace {
   flex: 1;
   overflow: hidden;
   position: relative;
+  min-width: 0; /* Позволяет flex-контейнеру сжиматься */
 }
 
 /* Скроллбары */
 .defect-content::-webkit-scrollbar,
-.details-content::-webkit-scrollbar {
+.details-content::-webkit-scrollbar,
+.defect-panel-content::-webkit-scrollbar {
   width: 8px;
 }
 
 .defect-content::-webkit-scrollbar-track,
-.details-content::-webkit-scrollbar-track {
+.details-content::-webkit-scrollbar-track,
+.defect-panel-content::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 4px;
 }
 
 .defect-content::-webkit-scrollbar-thumb,
-.details-content::-webkit-scrollbar-thumb {
+.details-content::-webkit-scrollbar-thumb,
+.defect-panel-content::-webkit-scrollbar-thumb {
   background: #cbd5e0;
   border-radius: 4px;
 }
 
 .defect-content::-webkit-scrollbar-thumb:hover,
-.details-content::-webkit-scrollbar-thumb:hover {
+.details-content::-webkit-scrollbar-thumb:hover,
+.defect-panel-content::-webkit-scrollbar-thumb:hover {
   background: #a0aec0;
 }
 
-.defect-tracking > *:not(.details-panel)::-webkit-scrollbar {
+.defect-tracking > *:not(.defect-panel)::-webkit-scrollbar {
   width: 8px;
 }
 
-.defect-tracking > *:not(.details-panel)::-webkit-scrollbar-track {
+.defect-tracking > *:not(.defect-panel)::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 4px;
 }
 
-.defect-tracking > *:not(.details-panel)::-webkit-scrollbar-thumb {
+.defect-tracking > *:not(.defect-panel)::-webkit-scrollbar-thumb {
   background: #cbd5e0;
   border-radius: 4px;
 }
 
-.defect-tracking > *:not(.details-panel)::-webkit-scrollbar-thumb:hover {
+.defect-tracking > *:not(.defect-panel)::-webkit-scrollbar-thumb:hover {
   background: #a0aec0;
 }
 
 /* Панель дефектов */
 .defect-panel {
-  width: 400px;
-  min-width: 400px;
+  width: 450px;
+  min-width: 450px;
   background: #ffffff;
   border-left: 2px solid #dee2e6;
   display: flex;
   flex-direction: column;
-  position: fixed;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 100;
+  height: 100%;
+  flex-shrink: 0;
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
-  overflow-y: auto;
-}
-
-/* Отступ сверху для панели, чтобы не перекрывала шапку */
-.defect-tracking-fullscreen .defect-panel {
-  top: 80px; /* Высота workspace-header */
-  height: calc(100vh - 80px);
+  overflow: hidden;
 }
 
 .defect-panel-header {
@@ -564,6 +664,7 @@
   padding: 20px;
   border-bottom: 2px solid #f8f9fa;
   background: #ffffff;
+  flex-shrink: 0;
 }
 
 .defect-panel-header h3 {
@@ -576,7 +677,9 @@
 .defect-panel-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
+  min-height: 0;
 }
 
 .segment-info {
@@ -873,7 +976,7 @@
   background: #f8f9fa;
   display: flex;
   justify-content: center;
-  margin-top: auto;
+  flex-shrink: 0;
 }
 
 .save-segment-btn {

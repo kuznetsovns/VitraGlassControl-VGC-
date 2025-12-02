@@ -9,6 +9,7 @@ import { DefectPanel } from '../DefectPanel/DefectPanel'
 interface DefectWorkspaceProps {
   vitrage: VitrageItem
   onBack: () => void
+  onSaveAndBack: () => void
   availableDefects: string[]
   segmentDefectsData: Map<string, SegmentDefectData>
   loadSegmentData: (vitrageId: string, segmentId: string) => {
@@ -33,6 +34,7 @@ interface DefectWorkspaceProps {
 export function DefectWorkspace({
   vitrage,
   onBack,
+  onSaveAndBack,
   availableDefects,
   segmentDefectsData,
   loadSegmentData,
@@ -46,43 +48,52 @@ export function DefectWorkspace({
     segmentDefectsData
   )
 
+  // Проверяем, есть ли дефекты у этого витража
+  const hasDefects = Array.from(segmentDefectsData.entries()).some(
+    ([key, data]) => key.startsWith(vitrage.id) && data.defects.length > 0
+  )
+
   return (
     <div className="defect-tracking-fullscreen">
       <WorkspaceHeader
         vitrage={vitrage}
         zoom={canvasControls.zoom}
+        hasDefects={hasDefects}
         onBack={onBack}
+        onSaveAndBack={onSaveAndBack}
         onZoomIn={canvasControls.handleZoomIn}
         onZoomOut={canvasControls.handleZoomOut}
         onResetZoom={canvasControls.handleResetZoom}
       />
 
-      <div className="workspace-layout">
-        <SvgViewer
-          vitrage={vitrage}
-          zoom={canvasControls.zoom}
-          pan={canvasControls.pan}
-          isPanning={canvasControls.isPanning}
-          svgContainerRef={canvasControls.svgContainerRef}
-          onWheel={canvasControls.handleWheel}
-          onMouseDown={canvasControls.handleCanvasMouseDown}
-          onMouseMove={canvasControls.handleCanvasMouseMove}
-          onMouseUp={canvasControls.handleCanvasMouseUp}
-        />
-      </div>
+      <div className={`workspace-container ${segmentSelection.showDefectPanel ? 'with-panel' : ''}`}>
+        <div className="workspace-layout">
+          <SvgViewer
+            vitrage={vitrage}
+            zoom={canvasControls.zoom}
+            pan={canvasControls.pan}
+            isPanning={canvasControls.isPanning}
+            svgContainerRef={canvasControls.svgContainerRef}
+            onWheel={canvasControls.handleWheel}
+            onMouseDown={canvasControls.handleCanvasMouseDown}
+            onMouseMove={canvasControls.handleCanvasMouseMove}
+            onMouseUp={canvasControls.handleCanvasMouseUp}
+          />
+        </div>
 
-      {/* Панель дефектов */}
-      {segmentSelection.showDefectPanel && segmentSelection.selectedSegmentId && (
-        <DefectPanel
-          selectedSegmentId={segmentSelection.selectedSegmentId}
-          selectedVitrage={vitrage}
-          availableDefects={availableDefects}
-          loadSegmentData={loadSegmentData}
-          saveSegmentData={saveSegmentData}
-          addNewDefect={addNewDefect}
-          onClose={segmentSelection.handleCloseDefectPanel}
-        />
-      )}
+        {/* Панель дефектов */}
+        {segmentSelection.showDefectPanel && segmentSelection.selectedSegmentId && (
+          <DefectPanel
+            selectedSegmentId={segmentSelection.selectedSegmentId}
+            selectedVitrage={vitrage}
+            availableDefects={availableDefects}
+            loadSegmentData={loadSegmentData}
+            saveSegmentData={saveSegmentData}
+            addNewDefect={addNewDefect}
+            onClose={segmentSelection.handleCloseDefectPanel}
+          />
+        )}
+      </div>
     </div>
   )
 }

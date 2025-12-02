@@ -1,4 +1,5 @@
 import type { VitrageItem, ProjectObject } from '../../types'
+import type { SegmentDefectData } from '../../../../services/defectStorage'
 import { VitrageCard } from './VitrageCard'
 
 interface DefectListViewProps {
@@ -6,6 +7,7 @@ interface DefectListViewProps {
   objects: ProjectObject[]
   selectedObject?: { id: string; name: string } | null
   storageSource: 'supabase' | 'localStorage'
+  segmentDefectsData: Map<string, SegmentDefectData>
   onVitrageClick: (vitrage: VitrageItem) => void
   showExportMenu: boolean
   setShowExportMenu: (show: boolean) => void
@@ -20,6 +22,7 @@ export function DefectListView({
   objects,
   selectedObject,
   storageSource,
+  segmentDefectsData,
   onVitrageClick,
   showExportMenu,
   setShowExportMenu,
@@ -93,6 +96,7 @@ export function DefectListView({
                   key={vitrage.id}
                   vitrage={vitrage}
                   objects={objects}
+                  segmentDefectsData={segmentDefectsData}
                   onClick={onVitrageClick}
                 />
               ))}

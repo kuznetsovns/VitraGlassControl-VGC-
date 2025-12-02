@@ -122,13 +122,13 @@ export function DefectPanel({
           onToggleDefect={handleToggleDefect}
           onAddNewDefect={addNewDefect}
         />
+      </div>
 
-        {/* Кнопка сохранения */}
-        <div className="panel-actions">
-          <button className="save-segment-btn" onClick={handleSave}>
-            💾 Сохранить данные сегмента
-          </button>
-        </div>
+      {/* Кнопка сохранения */}
+      <div className="panel-actions">
+        <button className="save-segment-btn" onClick={handleSave}>
+          💾 Сохранить данные сегмента
+        </button>
       </div>
     </div>
   )

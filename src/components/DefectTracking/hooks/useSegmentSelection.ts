@@ -39,16 +39,14 @@ export function useSegmentSelection(
     // Убираем выделение со всех сегментов
     const allSegments = svgContainerRef.current.querySelectorAll('.vitrage-segment')
     allSegments.forEach(segment => {
-      (segment as SVGRectElement).setAttribute('stroke', '#87ceeb')
-      (segment as SVGRectElement).setAttribute('stroke-width', '2')
+      segment.classList.remove('selected')
     })
 
     // Выделяем выбранный сегмент
     if (selectedSegmentId) {
       const selectedSegment = svgContainerRef.current.querySelector(`[data-segment-id="${selectedSegmentId}"]`)
       if (selectedSegment) {
-        (selectedSegment as SVGRectElement).setAttribute('stroke', '#ff6b6b')
-        (selectedSegment as SVGRectElement).setAttribute('stroke-width', '4')
+        selectedSegment.classList.add('selected')
       }
     }
 

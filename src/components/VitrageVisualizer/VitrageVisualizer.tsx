@@ -431,6 +431,9 @@ export default function VitrageVisualizer({ selectedObject }: VitrageVisualizerP
           : '📦 Сохранено локально (localStorage)';
 
         alert(`Витраж "${createdVitrage.name}" успешно сохранён!\n\n${storageInfo}\n\nПараметры:\n- Объект: ${selectedObject.name}\n- Сетка: ${createdVitrage.horizontal} × ${createdVitrage.vertical}\n- Всего сегментов: ${createdVitrage.horizontal * createdVitrage.vertical}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Спецификация Витражей"`);
+
+        // После успешного сохранения открываем форму конфигурации для создания нового витража
+        handleNewVitrage();
       } else {
         throw new Error('Не удалось сохранить витраж');
       }

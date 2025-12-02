@@ -1,23 +1,39 @@
 import type { VitrageItem, ProjectObject } from '../../types'
+import type { SegmentDefectData } from '../../../../services/defectStorage'
 import { getObjectName, getVersionName, calculateTotalArea } from '../../utils/vitrageHelpers'
 
 interface VitrageCardProps {
   vitrage: VitrageItem
   objects: ProjectObject[]
+  segmentDefectsData: Map<string, SegmentDefectData>
   onClick: (vitrage: VitrageItem) => void
 }
 
-export function VitrageCard({ vitrage, objects, onClick }: VitrageCardProps) {
+export function VitrageCard({ vitrage, objects, segmentDefectsData, onClick }: VitrageCardProps) {
+  // Подсчитываем количество дефектов для данного витража
+  const defectsCount = Array.from(segmentDefectsData.entries())
+    .filter(([key, data]) => key.startsWith(vitrage.id) && data.defects.length > 0)
+    .reduce((total, [, data]) => total + data.defects.length, 0)
+
+  const hasDefects = defectsCount > 0
+
   return (
     <div
-      className="vitrage-card"
+      className={`vitrage-card ${hasDefects ? 'has-defects' : ''}`}
       onClick={() => onClick(vitrage)}
     >
       <div className="vitrage-card-header">
         <h3>{vitrage.name}</h3>
-        <span className="vitrage-badge">
-          {vitrage.rows} × {vitrage.cols}
-        </span>
+        <div className="vitrage-badges">
+          <span className="vitrage-badge">
+            {vitrage.rows} × {vitrage.cols}
+          </span>
+          {hasDefects && (
+            <span className="vitrage-badge defects-badge" title={`Найдено дефектов: ${defectsCount}`}>
+              ⚠️ {defectsCount}
+            </span>
+          )}
+        </div>
       </div>
       <div className="vitrage-card-info">
         <div className="info-row">
