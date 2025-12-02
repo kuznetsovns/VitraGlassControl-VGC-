@@ -91,7 +91,7 @@ export default function MainContent({ activeSection, onSectionChange, onDepartme
               </div>
             </div>
             <div className="fullscreen-container">
-              <FloorPlanEditor />
+              <FloorPlanEditor selectedObject={selectedObject} />
             </div>
           </div>
         )

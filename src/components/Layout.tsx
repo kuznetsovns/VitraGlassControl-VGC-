@@ -14,11 +14,11 @@ export type Department = 'УОК' | 'Снабжение' | 'Гарантия' | 
 
 // Меню для отдела УОК
 const uokMenuItems: MenuItem[] = [
-  { id: 'vitrage-visualizer', label: 'Визуализатор Витража', icon: '🎨' },
-  { id: 'specification-new', label: 'Спецификация Витражей', icon: '📋' },
+  { id: 'vitrage-visualizer', label: 'Создание витража', icon: '🎨' },
+  { id: 'specification-new', label: 'Типовые витражи', icon: '📋' },
   { id: 'defect-tracking', label: 'Дефектовка', icon: '🔍' },
   { id: 'floor-plans', label: 'План этажей', icon: '🏢' },
-  { id: 'facade-plans', label: 'Планы фасадов', icon: '🏗️' },
+  { id: 'facade-plans', label: 'Фасады', icon: '🏗️' },
   { id: 'support', label: 'Поддержка', icon: '❓' },
   { id: 'settings', label: 'Настройки', icon: '⚙️' },
   { id: 'admin', label: 'Администрирование', icon: '👥' }

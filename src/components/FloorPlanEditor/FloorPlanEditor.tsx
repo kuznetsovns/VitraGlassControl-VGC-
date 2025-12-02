@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import './FloorPlanEditor.css'
+import { floorPlanStorage, type FloorPlanData } from '../../services/floorPlanStorage'
 
 // Re-define VitrageGrid interface locally since it's not exported from GraphicsEditor
 interface VitrageGrid {
@@ -78,9 +79,10 @@ export interface FloorPlan {
 interface FloorPlanEditorProps {
   width?: number
   height?: number
+  selectedObject?: { id: string; name: string } | null
 }
 
-export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps) {
+export default function FloorPlanEditor({ width, height, selectedObject }: FloorPlanEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [canvasDimensions, setCanvasDimensions] = useState({ width: width || 1200, height: height || 800 })
@@ -185,14 +187,44 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
 
   // Load saved data on mount
   useEffect(() => {
-    const plans = localStorage.getItem('floorPlans')
-    if (plans) {
-      setSavedPlans(JSON.parse(plans))
+    const loadPlansFromStorage = async () => {
+      if (!selectedObject?.id) {
+        console.log('No object selected, skipping floor plans load')
+        setSavedPlans([])
+        return
+      }
+
+      const { data, error, usingFallback } = await floorPlanStorage.getAll(selectedObject.id)
+
+      if (error) {
+        console.error('Error loading floor plans:', error)
+        setSavedPlans([])
+      } else {
+        console.log(`Loaded ${data.length} floor plans (using ${usingFallback ? 'localStorage' : 'Supabase'})`)
+        // Convert FloorPlanData to FloorPlan format
+        const plans: FloorPlan[] = data.map(plan => ({
+          id: plan.id || Date.now().toString(),
+          name: plan.name,
+          corpus: plan.corpus,
+          section: plan.section || '',
+          floor: plan.floor,
+          walls: plan.walls || [],
+          rooms: plan.rooms || [],
+          placedVitrages: plan.placed_vitrages || [],
+          scale: plan.scale || 10,
+          backgroundImage: plan.image_data || plan.image_url,
+          backgroundOpacity: plan.background_opacity || 0.7,
+          createdAt: new Date(plan.created_at || new Date()),
+          updatedAt: new Date(plan.updated_at || new Date())
+        }))
+        setSavedPlans(plans)
+      }
     }
 
+    loadPlansFromStorage()
     // Load vitrages from VitrageSpecification storage
     loadVitragesFromStorage()
-  }, [loadVitragesFromStorage])
+  }, [loadVitragesFromStorage, selectedObject?.id])
 
   // Update ID options from all placed vitrages
   useEffect(() => {
@@ -281,36 +313,71 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
     }
   }, [currentPlan?.backgroundImage, backgroundImageCache])
 
-  // Save plans to localStorage
+  // Save plans to storage (removed as we'll save individually)
   const savePlansToStorage = useCallback((plans: FloorPlan[]) => {
-    localStorage.setItem('floorPlans', JSON.stringify(plans))
+    // This method is now deprecated - we save plans individually to Supabase
     setSavedPlans(plans)
   }, [])
 
   // Create new floor plan
-  const createNewPlan = () => {
-    const newPlan: FloorPlan = {
-      id: Date.now().toString(),
-      name: newPlanData.name,
-      corpus: newPlanData.corpus,
-      section: newPlanData.section,
-      floor: newPlanData.floor,
-      walls: [],
-      rooms: [],
-      placedVitrages: [],
-      scale: 10, // 10mm per pixel
-      createdAt: new Date(),
-      updatedAt: new Date()
+  const createNewPlan = async () => {
+    if (!selectedObject?.id) {
+      alert('Пожалуйста, выберите объект для создания плана')
+      return
     }
 
-    // Add new plan to saved plans list
-    const newPlans = [...savedPlans, newPlan]
-    savePlansToStorage(newPlans)
+    setSaveStatus('saving')
 
-    // Set as current plan
-    setCurrentPlan(newPlan)
-    setHasUnsavedChanges(false)
-    setSaveStatus('saved')
+    const planData: FloorPlanData = {
+      object_id: selectedObject.id,
+      name: newPlanData.name,
+      corpus: newPlanData.corpus,
+      section: newPlanData.section || null,
+      floor: newPlanData.floor,
+      scale: 10, // 10mm per pixel
+      grid_visible: true,
+      background_opacity: 0.7,
+      placed_vitrages: [],
+      walls: [],
+      rooms: []
+    }
+
+    const { data, error, usingFallback } = await floorPlanStorage.create(planData)
+
+    if (error) {
+      console.error('Error creating floor plan:', error)
+      alert('Ошибка при создании плана')
+      setSaveStatus('saved')
+      return
+    }
+
+    if (data) {
+      console.log(`Created floor plan in ${usingFallback ? 'localStorage' : 'Supabase'}`)
+
+      const newPlan: FloorPlan = {
+        id: data.id || Date.now().toString(),
+        name: data.name,
+        corpus: data.corpus,
+        section: data.section || '',
+        floor: data.floor,
+        walls: data.walls || [],
+        rooms: data.rooms || [],
+        placedVitrages: data.placed_vitrages || [],
+        scale: data.scale || 10,
+        backgroundImage: data.image_data || data.image_url,
+        backgroundOpacity: data.background_opacity || 0.7,
+        createdAt: new Date(data.created_at || new Date()),
+        updatedAt: new Date(data.updated_at || new Date())
+      }
+
+      // Add to local state
+      setSavedPlans([...savedPlans, newPlan])
+
+      // Set as current plan
+      setCurrentPlan(newPlan)
+      setHasUnsavedChanges(false)
+      setSaveStatus('saved')
+    }
 
     // Close dialog and reset form
     setShowNewPlanDialog(false)
@@ -321,27 +388,52 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   }
 
   // Save current plan
-  const saveCurrentPlan = useCallback(() => {
-    if (!currentPlan) return
+  const saveCurrentPlan = useCallback(async () => {
+    if (!currentPlan || !selectedObject?.id) return
 
     setSaveStatus('saving')
 
     const updatedPlan = { ...currentPlan, updatedAt: new Date() }
-    const existingIndex = savedPlans.findIndex(p => p.id === updatedPlan.id)
 
-    let newPlans
-    if (existingIndex >= 0) {
-      newPlans = [...savedPlans]
-      newPlans[existingIndex] = updatedPlan
-    } else {
-      newPlans = [...savedPlans, updatedPlan]
+    // Convert to FloorPlanData format
+    const planData: Partial<FloorPlanData> = {
+      name: updatedPlan.name,
+      corpus: updatedPlan.corpus,
+      section: updatedPlan.section || null,
+      floor: updatedPlan.floor,
+      scale: updatedPlan.scale,
+      image_data: updatedPlan.backgroundImage,
+      background_opacity: updatedPlan.backgroundOpacity,
+      placed_vitrages: updatedPlan.placedVitrages,
+      walls: updatedPlan.walls,
+      rooms: updatedPlan.rooms
     }
 
-    savePlansToStorage(newPlans)
-    setCurrentPlan(updatedPlan)
-    setHasUnsavedChanges(false)
-    setSaveStatus('saved')
-  }, [currentPlan, savedPlans, savePlansToStorage])
+    const { data, error, usingFallback } = await floorPlanStorage.update(updatedPlan.id, planData)
+
+    if (error) {
+      console.error('Error saving floor plan:', error)
+      alert('Ошибка при сохранении плана')
+      setSaveStatus('unsaved')
+      return
+    }
+
+    if (data) {
+      console.log(`Saved floor plan to ${usingFallback ? 'localStorage' : 'Supabase'}`)
+
+      // Update local state
+      const existingIndex = savedPlans.findIndex(p => p.id === updatedPlan.id)
+      if (existingIndex >= 0) {
+        const newPlans = [...savedPlans]
+        newPlans[existingIndex] = updatedPlan
+        setSavedPlans(newPlans)
+      }
+
+      setCurrentPlan(updatedPlan)
+      setHasUnsavedChanges(false)
+      setSaveStatus('saved')
+    }
+  }, [currentPlan, savedPlans, selectedObject?.id])
 
   // Auto-save when plan changes
   useEffect(() => {
@@ -377,25 +469,59 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   }, [])
 
   // Create duplicate plan with new data
-  const createDuplicatePlan = () => {
-    if (!planToDuplicate) return
+  const createDuplicatePlan = async () => {
+    if (!planToDuplicate || !selectedObject?.id) return
 
-    const newPlan: FloorPlan = {
-      ...planToDuplicate,
-      id: Date.now().toString(),
+    setSaveStatus('saving')
+
+    const planData: FloorPlanData = {
+      object_id: selectedObject.id,
       name: duplicatePlanData.name,
       corpus: duplicatePlanData.corpus,
-      section: duplicatePlanData.section,
+      section: duplicatePlanData.section || null,
       floor: duplicatePlanData.floor,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      scale: planToDuplicate.scale,
+      image_data: planToDuplicate.backgroundImage,
+      background_opacity: planToDuplicate.backgroundOpacity,
+      placed_vitrages: planToDuplicate.placedVitrages,
+      walls: planToDuplicate.walls,
+      rooms: planToDuplicate.rooms,
+      grid_visible: true
     }
 
-    const newPlans = [...savedPlans, newPlan]
-    savePlansToStorage(newPlans)
-    setCurrentPlan(newPlan)
-    setHasUnsavedChanges(false)
-    setSaveStatus('saved')
+    const { data, error, usingFallback } = await floorPlanStorage.create(planData)
+
+    if (error) {
+      console.error('Error duplicating floor plan:', error)
+      alert('Ошибка при дублировании плана')
+      setSaveStatus('saved')
+      return
+    }
+
+    if (data) {
+      console.log(`Duplicated floor plan in ${usingFallback ? 'localStorage' : 'Supabase'}`)
+
+      const newPlan: FloorPlan = {
+        id: data.id || Date.now().toString(),
+        name: data.name,
+        corpus: data.corpus,
+        section: data.section || '',
+        floor: data.floor,
+        walls: data.walls || [],
+        rooms: data.rooms || [],
+        placedVitrages: data.placed_vitrages || [],
+        scale: data.scale || 10,
+        backgroundImage: data.image_data || data.image_url,
+        backgroundOpacity: data.background_opacity || 0.7,
+        createdAt: new Date(data.created_at || new Date()),
+        updatedAt: new Date(data.updated_at || new Date())
+      }
+
+      setSavedPlans([...savedPlans, newPlan])
+      setCurrentPlan(newPlan)
+      setHasUnsavedChanges(false)
+      setSaveStatus('saved')
+    }
 
     // Close dialog and reset
     setShowDuplicatePlanDialog(false)
@@ -407,10 +533,21 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
   }
 
   // Delete plan function
-  const deletePlan = useCallback((planToDelete: FloorPlan) => {
+  const deletePlan = useCallback(async (planToDelete: FloorPlan) => {
     if (confirm(`Вы уверены, что хотите удалить план "${planToDelete.name}"?`)) {
+      const { error, usingFallback } = await floorPlanStorage.delete(planToDelete.id)
+
+      if (error) {
+        console.error('Error deleting floor plan:', error)
+        alert('Ошибка при удалении плана')
+        return
+      }
+
+      console.log(`Deleted floor plan from ${usingFallback ? 'localStorage' : 'Supabase'}`)
+
+      // Update local state
       const newPlans = savedPlans.filter(p => p.id !== planToDelete.id)
-      savePlansToStorage(newPlans)
+      setSavedPlans(newPlans)
 
       // If deleted plan was current, clear it
       if (currentPlan?.id === planToDelete.id) {
@@ -419,7 +556,7 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
         setSaveStatus('saved')
       }
     }
-  }, [savedPlans, savePlansToStorage, currentPlan])
+  }, [savedPlans, currentPlan])
 
   // Load plan
   const loadPlan = (plan: FloorPlan) => {
@@ -1121,7 +1258,13 @@ export default function FloorPlanEditor({ width, height }: FloorPlanEditorProps)
             onChange={(e) => {
               const action = e.target.value
               if (action === 'open') setShowPlanSelector(true)
-              else if (action === 'new') setShowNewPlanDialog(true)
+              else if (action === 'new') {
+                if (!selectedObject?.id) {
+                  alert('Пожалуйста, выберите объект для создания планов этажей')
+                } else {
+                  setShowNewPlanDialog(true)
+                }
+              }
               else if (action === 'save' && currentPlan) saveCurrentPlan()
               else if (action === 'duplicate' && currentPlan) openDuplicatePlanDialog(currentPlan)
               e.target.value = '' // Reset selection
