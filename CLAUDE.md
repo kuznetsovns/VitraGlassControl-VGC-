@@ -129,7 +129,11 @@ interface PlacedVitrage {
 - **Russian UI**: Maintain Russian for all user-facing text
 - **Canvas modifications**: Study existing rendering code before changes
 - **Data model changes**: Test with fresh localStorage or provide migration
-- **File size limit**: Keep each file under 600 lines of code. If a file exceeds this limit, refactor by extracting logical parts into separate modules or components
+- **File size limit**: NEVER create or modify files to exceed 600 lines of code. If a file would exceed 600 lines:
+  - Split functionality into smaller modules
+  - Extract reusable components
+  - Create separate utility files
+  - Refactor before adding new features
 
 ### Git Operations
 - **Always push to main**: When asked to push/commit changes to GitHub, ALWAYS use `origin/main` branch

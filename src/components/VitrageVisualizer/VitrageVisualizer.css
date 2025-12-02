@@ -154,6 +154,7 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   min-width: 400px;
   max-width: 500px;
+  color: #000000;
 }
 
 .modal-content h3 {
@@ -161,6 +162,12 @@
   font-weight: 700;
   color: #2c3e50;
   margin-bottom: 20px;
+}
+
+.modal-content p,
+.modal-content label,
+.modal-content div {
+  color: #000000;
 }
 
 .modal-input {

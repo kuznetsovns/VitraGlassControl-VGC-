@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import './FloorPlanEditor.css'
 import { floorPlanStorage, type FloorPlanData } from '../../services/floorPlanStorage'
+import { vitrageStorage } from '../../services/vitrageStorage'
 
 // Re-define VitrageGrid interface locally since it's not exported from GraphicsEditor
 interface VitrageGrid {
@@ -169,19 +170,28 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Function to load vitrages from specification storage
-  const loadVitragesFromStorage = useCallback(() => {
-    const vitrages = localStorage.getItem('saved-vitrages')
-    if (vitrages) {
-      try {
-        const parsed = JSON.parse(vitrages) as VitrageGrid[]
-        setSavedVitrages(parsed.map((v) => ({
-          ...v,
-          createdAt: new Date(v.createdAt)
-        })))
-      } catch (error) {
-        console.error('Error loading vitrages:', error)
-      }
+  // Function to load vitrages from specification storage (Supabase or localStorage)
+  const loadVitragesFromStorage = useCallback(async () => {
+    try {
+      const { data, source } = await vitrageStorage.getAll()
+      console.log(`📋 Витражи загружены из ${source} для плана этажа:`, data.length)
+
+      // Преобразуем данные в формат VitrageGrid
+      const vitrageGrids: VitrageGrid[] = data.map((v) => ({
+        id: v.id,
+        name: v.marking,
+        rows: v.rows,
+        cols: v.cols,
+        segments: v.segments || [],
+        totalWidth: v.totalWidth,
+        totalHeight: v.totalHeight,
+        profileWidth: 12,
+        createdAt: new Date(v.createdAt)
+      }))
+
+      setSavedVitrages(vitrageGrids)
+    } catch (error) {
+      console.error('Ошибка загрузки витражей:', error)
     }
   }, [])
 
@@ -1794,11 +1804,11 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       {showVitrageSelector && (
         <div className="modal-overlay">
           <div className="modal large">
-            <h3>Выберите витраж для размещения</h3>
+            <h3>Выберите витраж из спецификации</h3>
             {savedVitrages.length > 0 ? (
               <>
-                <p style={{marginBottom: '16px', color: 'rgba(255, 255, 255, 0.8)'}}>
-                  Витражи загружаются из вкладки "Спецификация витражей"
+                <p style={{marginBottom: '16px'}}>
+                  Выберите витраж из списка для размещения на плане этажа
                 </p>
                 <div className="vitrage-grid">
                   {savedVitrages.map(vitrage => (
@@ -1815,7 +1825,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                         <div className="vitrage-grid-info">
                           {vitrage.rows}×{vitrage.cols} сегментов
                         </div>
-                        <div style={{marginTop: '8px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)'}}>
+                        <div style={{marginTop: '8px', fontSize: '11px', opacity: 0.7}}>
                           Создан: {new Date(vitrage.createdAt).toLocaleDateString('ru-RU')}
                         </div>
                       </div>
@@ -1824,10 +1834,12 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                 </div>
               </>
             ) : (
-              <div style={{padding: '40px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.8)'}}>
-                <p style={{marginBottom: '16px'}}>Нет сохраненных витражей</p>
-                <p style={{fontSize: '14px'}}>
-                  Перейдите во вкладку "Спецификация витражей" для просмотра и создания витражей
+              <div style={{padding: '40px', textAlign: 'center'}}>
+                <p style={{marginBottom: '16px', fontSize: '16px', fontWeight: '600'}}>
+                  Нет сохраненных витражей
+                </p>
+                <p style={{fontSize: '14px', opacity: 0.8}}>
+                  Перейдите во вкладку "Спецификация витражей" для создания витражей
                 </p>
               </div>
             )}
@@ -1848,13 +1860,13 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
 
         return (
           <div className="modal-overlay">
-            <div className="modal large" style={{maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column'}}>
+            <div className="modal large" style={{maxWidth: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflowY: 'auto'}}>
               <h3 style={{color: '#000'}}>Настройка ID секций витража: {vitrage.name}</h3>
               <p style={{marginBottom: '16px', color: '#000', fontSize: '14px'}}>
                 Кликните на секцию для задания ID. Всего секций: {vitrage.rows} × {vitrage.cols} = {vitrage.rows * vitrage.cols}
               </p>
 
-              <div style={{display: 'flex', gap: '20px', flex: 1, overflow: 'hidden'}}>
+              <div style={{display: 'flex', gap: '20px', flex: '1 1 auto', overflow: 'hidden', minHeight: '400px'}}>
                 {/* Left: Vitrage visualization */}
                 <div style={{flex: '1', display: 'flex', flexDirection: 'column', minWidth: '400px'}}>
                   <h4 style={{marginBottom: '12px', fontSize: '14px', color: '#000'}}>Визуализация витража</h4>
