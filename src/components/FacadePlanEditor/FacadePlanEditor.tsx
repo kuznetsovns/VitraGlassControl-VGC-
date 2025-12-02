@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import './FacadePlanEditor.css'
+import { vitrageStorage } from '../../services/vitrageStorage'
 
 // Re-define VitrageGrid interface locally since it's not exported from GraphicsEditor
 interface VitrageGrid {
@@ -31,6 +32,21 @@ export interface Room {
   area?: number
 }
 
+export interface VitrageID {
+  object: string      // Объект (Зил18, Примавера14)
+  corpus: string      // Корпус
+  section: string     // Секция
+  floor: string       // Этаж
+  apartment: string   // Квартира
+  vitrageNumber: string // Номер витража
+  vitrageName: string   // Название витража
+  vitrageSection: string // Секция витража
+}
+
+export interface SegmentIDMapping {
+  [segmentId: string]: VitrageID // Map segment ID to its custom ID
+}
+
 export interface PlacedVitrage {
   id: string
   vitrageId: string // Reference to VitrageGrid
@@ -39,6 +55,7 @@ export interface PlacedVitrage {
   rotation: number // 0, 90, 180, 270 degrees
   wallId?: string // Wall this vitrage is attached to
   scale: number
+  segmentIDs?: SegmentIDMapping // Custom IDs for each segment
 }
 
 export interface FacadePlan {
@@ -84,6 +101,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   const [showVitrageSelector, setShowVitrageSelector] = useState(false)
   const [showPlanSelector, setShowPlanSelector] = useState(false)
   const [showBackgroundScaleDialog, setShowBackgroundScaleDialog] = useState(false)
+  const [showVitrageIDDialog, setShowVitrageIDDialog] = useState(false)
   const [tempBackgroundImage, setTempBackgroundImage] = useState<string | null>(null)
   const [tempBackgroundScale, setTempBackgroundScale] = useState(1.0)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.3)
@@ -91,6 +109,32 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   const [mousePosition, setMousePosition] = useState<{x: number, y: number} | null>(null)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  // Vitrage ID state
+  const [currentVitrageID, setCurrentVitrageID] = useState<VitrageID>({
+    object: '',
+    corpus: '',
+    section: '',
+    floor: '',
+    apartment: '',
+    vitrageNumber: '',
+    vitrageName: '',
+    vitrageSection: ''
+  })
+  const [selectedSegmentForID, setSelectedSegmentForID] = useState<string | null>(null)
+  const [segmentIDsTemp, setSegmentIDsTemp] = useState<SegmentIDMapping>({})
+
+  // Options for ID dropdowns (will be populated from existing data)
+  const [idOptions] = useState({
+    objects: [] as string[],
+    corpuses: [] as string[],
+    sections: [] as string[],
+    floors: [] as string[],
+    apartments: [] as string[],
+    vitrageNumbers: [] as string[],
+    vitrageNames: [] as string[],
+    vitrageSections: [] as string[]
+  })
 
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -118,19 +162,28 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Function to load vitrages from specification storage
-  const loadVitragesFromStorage = useCallback(() => {
-    const vitrages = localStorage.getItem('saved-vitrages')
-    if (vitrages) {
-      try {
-        const parsed = JSON.parse(vitrages) as VitrageGrid[]
-        setSavedVitrages(parsed.map((v) => ({
-          ...v,
-          createdAt: new Date(v.createdAt)
-        })))
-      } catch (error) {
-        console.error('Error loading vitrages:', error)
-      }
+  // Function to load vitrages from specification storage (Supabase or localStorage)
+  const loadVitragesFromStorage = useCallback(async () => {
+    try {
+      const { data, source } = await vitrageStorage.getAll()
+      console.log(`📋 Витражи загружены из ${source} для плана фасада:`, data.length)
+
+      // Преобразуем данные в формат VitrageGrid
+      const vitrageGrids: VitrageGrid[] = data.map((v) => ({
+        id: v.id,
+        name: v.marking,
+        rows: v.rows,
+        cols: v.cols,
+        segments: v.segments || [],
+        totalWidth: v.totalWidth,
+        totalHeight: v.totalHeight,
+        profileWidth: 12,
+        createdAt: new Date(v.createdAt)
+      }))
+
+      setSavedVitrages(vitrageGrids)
+    } catch (error) {
+      console.error('Ошибка загрузки витражей:', error)
     }
   }, [])
 
@@ -870,6 +923,107 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
     }
   }
 
+  // Open vitrage ID dialog
+  const openVitrageIDDialog = () => {
+    if (!selectedItem || !currentPlan) return
+
+    const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
+    if (!placedVitrage) return
+
+    // Load existing segment IDs or create new mapping
+    setSegmentIDsTemp(placedVitrage.segmentIDs || {})
+    setSelectedSegmentForID(null)
+    setCurrentVitrageID({
+      object: '',
+      corpus: '',
+      section: '',
+      floor: '',
+      apartment: '',
+      vitrageNumber: '',
+      vitrageName: '',
+      vitrageSection: ''
+    })
+
+    setShowVitrageIDDialog(true)
+  }
+
+  // Select segment for ID editing
+  const selectSegmentForID = (segmentId: string) => {
+    setSelectedSegmentForID(segmentId)
+
+    // Load existing ID for this segment or empty ID
+    if (segmentIDsTemp[segmentId]) {
+      setCurrentVitrageID(segmentIDsTemp[segmentId])
+    } else {
+      setCurrentVitrageID({
+        object: '',
+        corpus: '',
+        section: '',
+        floor: '',
+        apartment: '',
+        vitrageNumber: '',
+        vitrageName: '',
+        vitrageSection: ''
+      })
+    }
+  }
+
+  // Save ID for current segment
+  const saveSegmentID = () => {
+    if (!selectedSegmentForID) return
+
+    setSegmentIDsTemp(prev => ({
+      ...prev,
+      [selectedSegmentForID]: currentVitrageID
+    }))
+
+    // Clear selection after saving
+    setSelectedSegmentForID(null)
+    setCurrentVitrageID({
+      object: '',
+      corpus: '',
+      section: '',
+      floor: '',
+      apartment: '',
+      vitrageNumber: '',
+      vitrageName: '',
+      vitrageSection: ''
+    })
+  }
+
+  // Save all segment IDs to vitrage
+  const saveAllSegmentIDs = () => {
+    if (!selectedItem || !currentPlan) return
+
+    updateCurrentPlan(plan => ({
+      ...plan,
+      placedVitrages: plan.placedVitrages.map(v =>
+        v.id === selectedItem ? {
+          ...v,
+          segmentIDs: segmentIDsTemp
+        } : v
+      )
+    }))
+
+    setShowVitrageIDDialog(false)
+  }
+
+  // Generate full ID string
+  const generateFullID = (id: VitrageID): string => {
+    const parts = [
+      id.object,
+      id.corpus,
+      id.section,
+      id.floor,
+      id.apartment,
+      id.vitrageNumber,
+      id.vitrageName,
+      id.vitrageSection
+    ].filter(p => p) // Remove empty parts
+
+    return parts.join('-')
+  }
+
   return (
     <div className="facade-plan-editor">
       <div className="editor-toolbar compact-toolbar">
@@ -1077,6 +1231,13 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
                             >
                               Повернуть на 90°
                             </button>
+                            <button
+                              className="primary"
+                              style={{marginTop: '8px', width: '100%'}}
+                              onClick={openVitrageIDDialog}
+                            >
+                              Назначить ID
+                            </button>
                           </>
                         )
                       }
@@ -1256,11 +1417,11 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
       {showVitrageSelector && (
         <div className="modal-overlay">
           <div className="modal large">
-            <h3>Выберите витраж для размещения</h3>
+            <h3>Выберите витраж из спецификации</h3>
             {savedVitrages.length > 0 ? (
               <>
-                <p style={{marginBottom: '16px', color: 'rgba(255, 255, 255, 0.8)'}}>
-                  Витражи загружаются из вкладки "Спецификация витражей"
+                <p style={{marginBottom: '16px'}}>
+                  Выберите витраж из списка для размещения на плане фасада
                 </p>
                 <div className="vitrage-grid">
                   {savedVitrages.map(vitrage => (
@@ -1277,7 +1438,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
                         <div className="vitrage-grid-info">
                           {vitrage.rows}×{vitrage.cols} сегментов
                         </div>
-                        <div style={{marginTop: '8px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)'}}>
+                        <div style={{marginTop: '8px', fontSize: '11px', opacity: 0.7}}>
                           Создан: {new Date(vitrage.createdAt).toLocaleDateString('ru-RU')}
                         </div>
                       </div>
@@ -1286,10 +1447,12 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
                 </div>
               </>
             ) : (
-              <div style={{padding: '40px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.8)'}}>
-                <p style={{marginBottom: '16px'}}>Нет сохраненных витражей</p>
-                <p style={{fontSize: '14px'}}>
-                  Перейдите во вкладку "Спецификация витражей" для просмотра и создания витражей
+              <div style={{padding: '40px', textAlign: 'center'}}>
+                <p style={{marginBottom: '16px', fontSize: '16px', fontWeight: '600'}}>
+                  Нет сохраненных витражей
+                </p>
+                <p style={{fontSize: '14px', opacity: 0.8}}>
+                  Перейдите во вкладку "Спецификация витражей" для создания витражей
                 </p>
               </div>
             )}
@@ -1364,6 +1527,272 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
           </div>
         </div>
       )}
+
+      {/* Vitrage ID Dialog */}
+      {showVitrageIDDialog && selectedItem && currentPlan && (() => {
+        const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
+        const vitrage = placedVitrage && savedVitrages.find(v => v.id === placedVitrage.vitrageId)
+        if (!vitrage || !placedVitrage) return null
+
+        return (
+          <div className="modal-overlay">
+            <div className="modal large" style={{maxWidth: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflowY: 'auto'}}>
+              <h3 style={{color: '#000'}}>Настройка ID секций витража: {vitrage.name}</h3>
+              <p style={{marginBottom: '16px', color: '#000', fontSize: '14px'}}>
+                Кликните на секцию для задания ID. Всего секций: {vitrage.rows} × {vitrage.cols} = {vitrage.rows * vitrage.cols}
+              </p>
+
+              <div style={{display: 'flex', gap: '20px', flex: '1 1 auto', overflow: 'hidden', minHeight: '400px'}}>
+                {/* Left: Vitrage visualization */}
+                <div style={{flex: '1', display: 'flex', flexDirection: 'column', minWidth: '400px'}}>
+                  <h4 style={{marginBottom: '12px', fontSize: '14px', color: '#000'}}>Визуализация витража</h4>
+                  <div style={{
+                    flex: 1,
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '8px',
+                    padding: '20px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    display: 'grid',
+                    gridTemplateRows: `repeat(${vitrage.rows}, 1fr)`,
+                    gap: '4px',
+                    minHeight: '300px'
+                  }}>
+                    {Array.from({ length: vitrage.rows }).map((_, rowIndex) => (
+                      <div key={rowIndex} style={{
+                        display: 'grid',
+                        gridTemplateColumns: `repeat(${vitrage.cols}, 1fr)`,
+                        gap: '4px'
+                      }}>
+                        {Array.from({ length: vitrage.cols }).map((_, colIndex) => {
+                          const segmentId = `segment-${rowIndex}-${colIndex}`
+                          const hasID = !!segmentIDsTemp[segmentId]
+                          const isSelected = selectedSegmentForID === segmentId
+
+                          return (
+                            <div
+                              key={colIndex}
+                              onClick={() => selectSegmentForID(segmentId)}
+                              style={{
+                                border: isSelected ? '3px solid #4CAF50' : '2px solid #000',
+                                borderRadius: '4px',
+                                background: isSelected ? 'rgba(76, 175, 80, 0.3)' : hasID ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '8px',
+                                transition: 'all 0.2s',
+                                minHeight: '60px'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = isSelected ? 'rgba(76, 175, 80, 0.4)' : 'rgba(76, 175, 80, 0.2)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = isSelected ? 'rgba(76, 175, 80, 0.3)' : hasID ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.1)'
+                              }}
+                            >
+                              <div style={{fontSize: '11px', color: '#000', fontWeight: 'bold'}}>
+                                {rowIndex + 1}-{colIndex + 1}
+                              </div>
+                              {hasID && (
+                                <div style={{fontSize: '9px', color: '#000', marginTop: '4px', textAlign: 'center', wordBreak: 'break-all'}}>
+                                  ✓ ID
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right: ID form */}
+                <div style={{flex: '1', display: 'flex', flexDirection: 'column', minWidth: '400px'}}>
+                  {selectedSegmentForID ? (
+                    <>
+                      <h4 style={{marginBottom: '12px', fontSize: '14px', color: '#000'}}>
+                        ID для секции {selectedSegmentForID.split('-')[1]}-{selectedSegmentForID.split('-')[2]}
+                      </h4>
+
+                      <div style={{flex: 1, overflowY: 'auto', paddingRight: '8px'}}>
+                        <div style={{display: 'grid', gridTemplateColumns: '1fr', gap: '12px'}}>
+                          <div className="form-group">
+                            <label>1. Объект:</label>
+                            <input
+                              type="text"
+                              list="objects-list"
+                              value={currentVitrageID.object}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, object: e.target.value})}
+                              placeholder="Зил18, Примавера14"
+                            />
+                            <datalist id="objects-list">
+                              {idOptions.objects.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>2. Корпус:</label>
+                            <input
+                              type="text"
+                              list="corpuses-list"
+                              value={currentVitrageID.corpus}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, corpus: e.target.value})}
+                              placeholder="А, Б, 1"
+                            />
+                            <datalist id="corpuses-list">
+                              {idOptions.corpuses.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>3. Секция:</label>
+                            <input
+                              type="text"
+                              list="sections-list"
+                              value={currentVitrageID.section}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, section: e.target.value})}
+                              placeholder="1, 2, 3"
+                            />
+                            <datalist id="sections-list">
+                              {idOptions.sections.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>4. Этаж:</label>
+                            <input
+                              type="text"
+                              list="floors-list"
+                              value={currentVitrageID.floor}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, floor: e.target.value})}
+                              placeholder="1, 2, 3"
+                            />
+                            <datalist id="floors-list">
+                              {idOptions.floors.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>5. Квартира:</label>
+                            <input
+                              type="text"
+                              list="apartments-list"
+                              value={currentVitrageID.apartment}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, apartment: e.target.value})}
+                              placeholder="1, 2, 101"
+                            />
+                            <datalist id="apartments-list">
+                              {idOptions.apartments.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>6. Номер витража:</label>
+                            <input
+                              type="text"
+                              list="vitrage-numbers-list"
+                              value={currentVitrageID.vitrageNumber}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, vitrageNumber: e.target.value})}
+                              placeholder="1, 2, 3"
+                            />
+                            <datalist id="vitrage-numbers-list">
+                              {idOptions.vitrageNumbers.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>7. Название витража:</label>
+                            <input
+                              type="text"
+                              list="vitrage-names-list"
+                              value={currentVitrageID.vitrageName}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, vitrageName: e.target.value})}
+                              placeholder="В1, Окно, Дверь"
+                            />
+                            <datalist id="vitrage-names-list">
+                              {idOptions.vitrageNames.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+
+                          <div className="form-group">
+                            <label>8. Секция витража:</label>
+                            <input
+                              type="text"
+                              list="vitrage-sections-list"
+                              value={currentVitrageID.vitrageSection}
+                              onChange={(e) => setCurrentVitrageID({...currentVitrageID, vitrageSection: e.target.value})}
+                              placeholder="A, B, 1"
+                            />
+                            <datalist id="vitrage-sections-list">
+                              {idOptions.vitrageSections.map(opt => <option key={opt} value={opt} />)}
+                            </datalist>
+                          </div>
+                        </div>
+
+                        {/* Preview of generated ID */}
+                        <div style={{
+                          padding: '12px',
+                          background: 'rgba(33, 150, 243, 0.1)',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(33, 150, 243, 0.3)',
+                          marginTop: '16px'
+                        }}>
+                          <div style={{fontSize: '11px', color: '#000', marginBottom: '6px'}}>
+                            Предварительный просмотр ID:
+                          </div>
+                          <div style={{fontSize: '13px', color: '#000', fontWeight: 'bold', wordBreak: 'break-all'}}>
+                            {generateFullID(currentVitrageID) || '(пусто)'}
+                          </div>
+                        </div>
+
+                        <button
+                          className="primary"
+                          onClick={saveSegmentID}
+                          style={{width: '100%', marginTop: '16px'}}
+                        >
+                          Сохранить ID для секции
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#000',
+                      textAlign: 'center',
+                      padding: '40px'
+                    }}>
+                      <div>
+                        <div style={{fontSize: '48px', marginBottom: '16px'}}>👆</div>
+                        <div style={{fontSize: '16px'}}>Выберите секцию слева<br/>для настройки ID</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-actions" style={{marginTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '16px'}}>
+                <button
+                  className="secondary"
+                  onClick={() => setShowVitrageIDDialog(false)}
+                >
+                  Отмена
+                </button>
+                <button
+                  className="primary"
+                  onClick={saveAllSegmentIDs}
+                >
+                  Завершить настройку ID
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

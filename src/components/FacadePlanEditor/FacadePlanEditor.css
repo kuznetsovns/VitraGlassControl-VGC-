@@ -294,26 +294,59 @@
     rgba(255, 255, 255, 0.95) 0%,
     rgba(248, 250, 252, 0.95) 100%);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 16px;
   padding: 24px;
   width: 90%;
   max-width: 500px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  color: #000000;
 }
 
 .modal.large {
-  max-width: 800px;
-  max-height: 80vh;
+  min-width: 700px;
+  width: calc(100vw - 320px);
+  max-width: 1400px;
+  max-height: 85vh;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Адаптация под разные размеры экрана */
+@media (max-width: 1600px) {
+  .modal.large {
+    width: calc(100vw - 300px);
+    max-width: 1200px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .modal.large {
+    width: calc(100vw - 100px);
+    max-width: 1000px;
+  }
+}
+
+@media (max-width: 768px) {
+  .modal.large {
+    width: calc(100vw - 40px);
+    min-width: 300px;
+  }
 }
 
 .modal h3 {
   margin: 0 0 20px 0;
   font-size: 20px;
   font-weight: 700;
-  color: #333;
+  color: #000000;
   text-align: center;
+}
+
+.modal p,
+.modal label,
+.modal div {
+  color: #000000;
 }
 
 .form-group {
