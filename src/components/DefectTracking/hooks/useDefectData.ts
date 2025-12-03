@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { ProjectObject, VitrageItem } from '../types'
 import { vitrageStorage } from '../../../services/vitrageStorage'
 import { defectStorage, type SegmentDefectData } from '../../../services/defectStorage'
+import { placedVitrageStorage, type PlacedVitrageData } from '../../../services/placedVitrageStorage'
 
 export function useDefectData(selectedObject?: { id: string; name: string } | null) {
   const [objects, setObjects] = useState<ProjectObject[]>([])
@@ -22,6 +23,7 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
 
   const [segmentDefectsData, setSegmentDefectsData] = useState<Map<string, SegmentDefectData>>(new Map())
   const [storageSource, setStorageSource] = useState<'supabase' | 'localStorage'>('localStorage')
+  const [placedVitrages, setPlacedVitrages] = useState<PlacedVitrageData[]>([])
 
   // Загрузка объектов, витражей и дефектов
   useEffect(() => {
@@ -33,6 +35,40 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
     // Загрузка витражей через сервис
     const loadVitrages = async () => {
       try {
+        // Если выбран объект, загружаем размещенные витражи из placed_vitrages
+        if (selectedObject?.id) {
+          const placedResult = await placedVitrageStorage.getForDefectTracking(selectedObject.id)
+          if (placedResult.data && placedResult.data.length > 0) {
+            console.log(`📍 Загружено ${placedResult.data.length} размещенных витражей из ${placedResult.usingFallback ? 'localStorage' : 'Supabase'}`)
+            setPlacedVitrages(placedResult.data)
+
+            // Преобразуем размещенные витражи в формат VitrageItem для отображения
+            const vitrageItems: VitrageItem[] = placedResult.data.map(pv => ({
+              id: pv.id || pv.vitrage_id,
+              name: pv.vitrage_name,
+              marking: pv.full_id || pv.vitrage_name,
+              objectId: pv.object_id,
+              vitrageName: pv.vitrage_name,
+              vitrageData: pv.vitrage_data,
+              rows: pv.vitrage_data?.rows || 1,
+              cols: pv.vitrage_data?.cols || 1,
+              totalWidth: pv.vitrage_data?.totalWidth || 1000,
+              totalHeight: pv.vitrage_data?.totalHeight || 1000,
+              segments: pv.vitrage_data?.segments || [],
+              segmentDefects: pv.segment_defects,
+              inspectionStatus: pv.inspection_status,
+              defectiveSegmentsCount: pv.defective_segments_count,
+              totalDefectsCount: pv.total_defects_count,
+              createdAt: pv.created_at || new Date().toISOString()
+            }))
+
+            setVitrages(vitrageItems)
+            setStorageSource(placedResult.usingFallback ? 'localStorage' : 'supabase')
+            return
+          }
+        }
+
+        // Иначе загружаем все витражи из спецификации
         const { data, source } = await vitrageStorage.getAll()
         setVitrages(data as VitrageItem[])
         setStorageSource(source)
@@ -65,7 +101,7 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
     loadVitrages()
     loadDefectTypes()
     loadDefectsData()
-  }, [])
+  }, [selectedObject])
 
   // Фильтрация витражей по выбранному объекту
   useEffect(() => {
@@ -96,6 +132,31 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
 
   // Функция для загрузки данных сегмента
   const loadSegmentData = (vitrageId: string, segmentId: string) => {
+    // Сначала проверяем, есть ли данные в размещенных витражах
+    if (selectedObject?.id && placedVitrages.length > 0) {
+      const placedVitrage = placedVitrages.find(pv =>
+        pv.id === vitrageId || pv.vitrage_id === vitrageId
+      )
+
+      if (placedVitrage?.segment_defects) {
+        const segmentIndex = parseInt(segmentId)
+        const segmentKey = `segment-${segmentIndex}`
+        const segmentData = placedVitrage.segment_defects[segmentKey]
+
+        if (segmentData) {
+          return {
+            inspectionDate: segmentData.checked_at || new Date().toISOString().split('T')[0],
+            inspector: segmentData.checked_by || '',
+            siteManager: segmentData.notes?.includes('Прораб:')
+              ? segmentData.notes.split('Прораб:')[1]?.trim() || ''
+              : '',
+            defects: segmentData.defects || []
+          }
+        }
+      }
+    }
+
+    // Затем проверяем локальное состояние
     const key = `${vitrageId}-${segmentId}`
     const savedData = segmentDefectsData.get(key)
 
@@ -132,7 +193,61 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
     const segmentIndex = parseInt(segmentId)
 
     try {
-      // Сохраняем через сервис (Supabase или localStorage)
+      // Если выбран объект и есть размещенные витражи, сохраняем в placed_vitrages
+      if (selectedObject?.id && placedVitrages.length > 0) {
+        // Находим размещенный витраж по ID
+        const placedVitrage = placedVitrages.find(pv =>
+          pv.id === vitrageId || pv.vitrage_id === vitrageId
+        )
+
+        if (placedVitrage && placedVitrage.id) {
+          // Получаем текущие дефекты сегментов или создаем новый объект
+          const currentSegmentDefects = placedVitrage.segment_defects || {}
+
+          // Обновляем дефекты для конкретного сегмента
+          const segmentKey = `segment-${segmentIndex}`
+          currentSegmentDefects[segmentKey] = {
+            defects: data.defects,
+            status: data.defects.length > 0 ? 'defective' : 'ok',
+            notes: `Проверил: ${data.inspector}, Прораб: ${data.siteManager}`,
+            checked_at: data.inspectionDate,
+            checked_by: data.inspector
+          }
+
+          // Сохраняем обновленные дефекты в Supabase
+          const { data: updatedVitrage, usingFallback } = await placedVitrageStorage.updateSegmentDefects(
+            placedVitrage.id,
+            currentSegmentDefects
+          )
+
+          // Обновляем статус проверки витража
+          if (updatedVitrage) {
+            await placedVitrageStorage.updateInspectionStatus(
+              placedVitrage.id,
+              'in_progress',
+              data.inspector,
+              `Последняя проверка: ${new Date().toLocaleDateString('ru-RU')}`
+            )
+          }
+
+          // Обновляем локальное состояние
+          const newData: SegmentDefectData = {
+            vitrageId,
+            segmentIndex,
+            ...data
+          }
+
+          setSegmentDefectsData(prev => {
+            const newMap = new Map(prev)
+            newMap.set(key, newData)
+            return newMap
+          })
+
+          return { success: true, source: usingFallback ? 'localStorage' : 'supabase' }
+        }
+      }
+
+      // Иначе используем старый метод сохранения
       const { source } = await defectStorage.saveSegmentDefects(
         vitrageId,
         segmentIndex,
@@ -170,6 +285,7 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
     storageSource,
     addNewDefect,
     loadSegmentData,
-    saveSegmentData
+    saveSegmentData,
+    placedVitrages
   }
 }

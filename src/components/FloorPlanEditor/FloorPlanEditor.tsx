@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import './FloorPlanEditor.css'
 import { floorPlanStorage, type FloorPlanData } from '../../services/floorPlanStorage'
 import { vitrageStorage } from '../../services/vitrageStorage'
+import { placedVitrageStorage, type PlacedVitrageData } from '../../services/placedVitrageStorage'
 
 // Re-define VitrageGrid interface locally since it's not exported from GraphicsEditor
 interface VitrageGrid {
@@ -828,9 +829,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     setShowVitrageSelector(false)
   }
 
-  const placeVitrageAtPosition = (x: number, y: number) => {
-    if (!currentPlan || !selectedVitrageForPlacement) return
-    
+  const placeVitrageAtPosition = async (x: number, y: number) => {
+    if (!currentPlan || !selectedVitrageForPlacement || !selectedObject?.id) return
+
     const newPlacedVitrage: PlacedVitrage = {
       id: Date.now().toString(),
       vitrageId: selectedVitrageForPlacement.id,
@@ -839,12 +840,45 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       rotation: 0,
       scale: 0.5 // Scale down for floor plan view
     }
-    
+
+    // Create placed vitrage in Supabase
+    const placedVitrageData: PlacedVitrageData = {
+      id: newPlacedVitrage.id,
+      object_id: selectedObject.id,
+      floor_plan_id: currentPlan.id,
+      vitrage_id: newPlacedVitrage.vitrageId,
+      vitrage_name: selectedVitrageForPlacement.name,
+      vitrage_data: {
+        rows: selectedVitrageForPlacement.rows,
+        cols: selectedVitrageForPlacement.cols,
+        totalWidth: selectedVitrageForPlacement.totalWidth,
+        totalHeight: selectedVitrageForPlacement.totalHeight,
+        segments: selectedVitrageForPlacement.segments
+      },
+      position_x: x,
+      position_y: y,
+      rotation: 0,
+      scale: 0.5,
+      inspection_status: 'not_checked',
+      total_defects_count: 0,
+      defective_segments_count: 0,
+      segment_defects: {}
+    }
+
+    const { data, error } = await placedVitrageStorage.create(placedVitrageData)
+
+    if (error) {
+      console.error('Error creating placed vitrage in Supabase:', error)
+    } else {
+      console.log('✅ Placed vitrage saved to Supabase')
+    }
+
+    // Update local state
     updateCurrentPlan(plan => ({
       ...plan,
       placedVitrages: [...plan.placedVitrages, newPlacedVitrage]
     }))
-    
+
     // Reset selection but keep tool active for placing more
     setSelectedVitrageForPlacement(null)
     setMousePosition(null)
@@ -1072,9 +1106,17 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
 
   // Handle keyboard events for Delete key
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.key === 'Delete' && selectedItem && currentPlan) {
-        // Delete selected vitrage
+        // Delete from Supabase
+        const { error } = await placedVitrageStorage.delete(selectedItem)
+        if (error) {
+          console.error('Error deleting placed vitrage from Supabase:', error)
+        } else {
+          console.log('✅ Vitrage deleted from Supabase')
+        }
+
+        // Delete selected vitrage from local state
         updateCurrentPlan(plan => ({
           ...plan,
           placedVitrages: plan.placedVitrages.filter(v => v.id !== selectedItem)
@@ -1225,9 +1267,68 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   }
 
   // Save all segment IDs to vitrage
-  const saveAllSegmentIDs = () => {
-    if (!selectedItem || !currentPlan) return
+  const saveAllSegmentIDs = async () => {
+    if (!selectedItem || !currentPlan || !selectedObject?.id) return
 
+    const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
+    if (!placedVitrage) return
+
+    const vitrage = savedVitrages.find(v => v.id === placedVitrage.vitrageId)
+    if (!vitrage) return
+
+    // Extract first ID data (assuming all segments have same object/corpus/section/floor)
+    const firstSegmentID = Object.values(segmentIDsTemp)[0]
+
+    if (firstSegmentID) {
+      // Create or update placed vitrage in Supabase
+      const placedVitrageData: PlacedVitrageData = {
+        id: placedVitrage.id,
+        object_id: selectedObject.id,
+        floor_plan_id: currentPlan.id,
+        vitrage_id: placedVitrage.vitrageId,
+        vitrage_name: vitrage.name,
+        vitrage_data: {
+          rows: vitrage.rows,
+          cols: vitrage.cols,
+          totalWidth: vitrage.totalWidth,
+          totalHeight: vitrage.totalHeight,
+          segments: vitrage.segments
+        },
+        position_x: placedVitrage.x,
+        position_y: placedVitrage.y,
+        rotation: placedVitrage.rotation,
+        scale: placedVitrage.scale,
+        // ID компоненты
+        id_object: firstSegmentID.object,
+        id_corpus: firstSegmentID.corpus,
+        id_section: firstSegmentID.section,
+        id_floor: firstSegmentID.floor,
+        id_apartment: firstSegmentID.apartment,
+        id_vitrage_number: firstSegmentID.vitrageNumber,
+        id_vitrage_name: firstSegmentID.vitrageName,
+        id_vitrage_section: firstSegmentID.vitrageSection
+      }
+
+      // Try to update existing or create new
+      const { data, error } = await placedVitrageStorage.update(
+        placedVitrage.id,
+        placedVitrageData
+      )
+
+      if (error || !data) {
+        // If update failed, try to create
+        const createResult = await placedVitrageStorage.create(placedVitrageData)
+        if (createResult.error) {
+          console.error('Error saving vitrage ID to Supabase:', createResult.error)
+        } else {
+          console.log('✅ Vitrage ID saved to Supabase')
+        }
+      } else {
+        console.log('✅ Vitrage ID updated in Supabase')
+      }
+    }
+
+    // Update local state
     updateCurrentPlan(plan => ({
       ...plan,
       placedVitrages: plan.placedVitrages.map(v =>
