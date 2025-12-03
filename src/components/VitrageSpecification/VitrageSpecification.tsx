@@ -18,13 +18,13 @@ export interface VitrageGrid {
 
 export interface VitrageSegment {
   id: string
-  row: number
-  col: number
-  x: number
-  y: number
-  width: number
-  height: number
-  type: 'glass' | 'ventilation' | 'empty' | 'sandwich' | 'casement' | 'door'
+  row?: number
+  col?: number
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  type: string
   formula?: string
   label?: string
   selected?: boolean
@@ -35,6 +35,8 @@ export interface VitrageSegment {
   rowSpan?: number
   colSpan?: number
   isStemalit?: boolean
+  hidden?: boolean
+  mergedInto?: number
 }
 
 interface SpecificationItem {
@@ -99,40 +101,53 @@ export default function VitrageSpecification() {
 
   const calculateSpecification = (vitrage: VitrageGrid): SpecificationItem[] => {
     const specification: { [key: string]: SpecificationItem } = {}
-    
+
     vitrage.segments.forEach(segment => {
-      if (segment.merged || !segment.realWidth || !segment.realHeight) return
-      
-      if (!specification[segment.type]) {
-        specification[segment.type] = {
-          type: segment.type,
+      // Пропускаем скрытые и объединенные сегменты
+      if (segment.hidden || segment.merged) return
+
+      // Используем поля width/height вместо realWidth/realHeight
+      const segmentWidth = segment.width || segment.realWidth
+      const segmentHeight = segment.height || segment.realHeight
+
+      if (!segmentWidth || !segmentHeight) return
+
+      const segmentType = segment.type as any || 'empty'
+
+      if (!specification[segmentType]) {
+        specification[segmentType] = {
+          type: segmentType,
           count: 0,
           totalArea: 0,
           items: []
         }
       }
-      
-      const area = (segment.realWidth * segment.realHeight) / 1000000 // переводим в м²
-      
-      specification[segment.type].count++
-      specification[segment.type].totalArea += area
-      specification[segment.type].items.push({
-        label: segment.label || `${getTypeLabel(segment.type)} ${specification[segment.type].count}`,
-        width: segment.realWidth,
-        height: segment.realHeight,
+
+      const area = (segmentWidth * segmentHeight) / 1000000 // переводим в м²
+
+      specification[segmentType].count++
+      specification[segmentType].totalArea += area
+      specification[segmentType].items.push({
+        label: segment.label || `${getTypeLabel(segmentType)} ${specification[segmentType].count}`,
+        width: segmentWidth,
+        height: segmentHeight,
         area: area,
         formula: segment.formula,
         isStemalit: segment.isStemalit
       })
     })
-    
+
     return Object.values(specification).filter(item => item.count > 0)
   }
 
   const getTotalArea = (vitrage: VitrageGrid): number => {
     return vitrage.segments
-      .filter(s => !s.merged && s.realWidth && s.realHeight)
-      .reduce((total, segment) => total + (segment.realWidth! * segment.realHeight!) / 1000000, 0)
+      .filter(s => !s.merged && !s.hidden)
+      .reduce((total, segment) => {
+        const width = segment.width || segment.realWidth || 0
+        const height = segment.height || segment.realHeight || 0
+        return total + (width * height) / 1000000
+      }, 0)
   }
 
   return (

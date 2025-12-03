@@ -395,10 +395,44 @@ export default function VitrageVisualizer({ selectedObject }: VitrageVisualizerP
             width: properties?.width ? parseFloat(properties.width) : undefined,
             height: properties?.height ? parseFloat(properties.height) : undefined,
             formula: properties?.formula || undefined,
-            label: properties?.label || `${segmentId}`
+            label: properties?.label || `${segmentId}`,
+            // Сохраняем расширенные свойства для объединенных сегментов
+            merged: properties?.merged,
+            rowSpan: properties?.rowSpan,
+            colSpan: properties?.colSpan,
+            hidden: properties?.hidden,
+            mergedInto: properties?.mergedInto
           });
         }
       }
+
+      // Рассчитываем реальные размеры витража на основе сегментов
+      let totalWidth = 0;
+      let totalHeight = 0;
+
+      // Вычисляем общую ширину (сумма ширин сегментов первого ряда)
+      for (let col = 0; col < cols; col++) {
+        const segmentId = 0 * cols + col + 1;
+        const properties = segmentProperties[segmentId];
+        // Если сегмент объединен, пропускаем его
+        if (properties?.hidden) continue;
+        const width = properties?.width ? parseFloat(properties.width) : 600 / cols;
+        totalWidth += width;
+      }
+
+      // Вычисляем общую высоту (сумма высот сегментов первого столбца)
+      for (let row = 0; row < rows; row++) {
+        const segmentId = row * cols + 0 + 1;
+        const properties = segmentProperties[segmentId];
+        // Если сегмент объединен, пропускаем его
+        if (properties?.hidden) continue;
+        const height = properties?.height ? parseFloat(properties.height) : 400 / rows;
+        totalHeight += height;
+      }
+
+      // Если размеры не заданы, используем значения по умолчанию
+      if (totalWidth === 0) totalWidth = 600;
+      if (totalHeight === 0) totalHeight = 400;
 
       // Генерируем SVG отрисовку
       console.log('Генерация SVG...');
@@ -415,8 +449,8 @@ export default function VitrageVisualizer({ selectedObject }: VitrageVisualizerP
         cols: cols,
         segments: segments,
         segmentProperties: segmentProperties,
-        totalWidth: 600,
-        totalHeight: 400,
+        totalWidth: Math.round(totalWidth),
+        totalHeight: Math.round(totalHeight),
         svgDrawing: svgDrawing,
       };
 
