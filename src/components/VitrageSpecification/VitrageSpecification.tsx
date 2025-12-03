@@ -200,7 +200,7 @@ export default function VitrageSpecification() {
 
         {selectedVitrage && (
           <div className="vitrage-details">
-            <h3>Спецификация витража "{selectedVitrage.name}"</h3>
+            <h3>Типовые витражи "{selectedVitrage.name}"</h3>
             {selectedVitrage.siteManager && (
               <p className="vitrage-site-manager"><strong>Начальник участка:</strong> {selectedVitrage.siteManager}</p>
             )}
@@ -247,13 +247,13 @@ export default function VitrageSpecification() {
             </div>
 
             <div className="specification-summary">
-              <h4>Сводка по типам элементов:</h4>
+              <h4>Сводка по типам элементов</h4>
               <div className="summary-grid">
                 {calculateSpecification(selectedVitrage).map((item, index) => (
                   <div key={index} className="summary-item">
                     <div className="summary-type">{getTypeLabel(item.type)}</div>
-                    <div className="summary-count">Количество: {item.count}</div>
-                    <div className="summary-area">Площадь: {item.totalArea.toFixed(3)} м²</div>
+                    <div className="summary-count"><span>Количество:</span> <strong>{item.count} шт</strong></div>
+                    <div className="summary-area"><span>Площадь:</span> <strong>{item.totalArea.toFixed(3)} м²</strong></div>
                   </div>
                 ))}
               </div>
