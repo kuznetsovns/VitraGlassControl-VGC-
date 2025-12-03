@@ -33,6 +33,11 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
 
   const [storageSource, setStorageSource] = useState<'supabase' | 'localStorage'>('localStorage');
 
+  // Фильтры
+  const [filterVitrageType, setFilterVitrageType] = useState<string>('all');
+  const [filterSegmentsCount, setFilterSegmentsCount] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
   // Загрузка объектов и витражей
   useEffect(() => {
     const loadedObjects = localStorage.getItem('project-objects');
@@ -55,7 +60,7 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
     loadVitrages();
   }, []);
 
-  // Фильтрация витражей по выбранному объекту
+  // Фильтрация витражей по выбранному объекту и фильтрам
   useEffect(() => {
     let filtered = vitrages;
 
@@ -63,8 +68,30 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
       filtered = filtered.filter(v => v.objectId === selectedObject.id);
     }
 
+    // Фильтр по типу витража (В-1, В-2 и т.д.)
+    if (filterVitrageType !== 'all') {
+      filtered = filtered.filter(vitrage => vitrage.name === filterVitrageType);
+    }
+
+    // Фильтр по количеству сегментов
+    if (filterSegmentsCount !== 'all') {
+      const targetCount = parseInt(filterSegmentsCount);
+      filtered = filtered.filter(vitrage => {
+        const count = vitrage.rows * vitrage.cols;
+        return count === targetCount;
+      });
+    }
+
+    // Поиск по названию
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(vitrage =>
+        vitrage.name.toLowerCase().includes(query)
+      );
+    }
+
     setFilteredVitrages(filtered);
-  }, [selectedObject, vitrages]);
+  }, [selectedObject, vitrages, filterVitrageType, filterSegmentsCount, searchQuery]);
 
   const getObjectName = (vitrage: VitrageItem) => {
     // Сначала проверяем objectName (новый формат)
@@ -108,6 +135,43 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
       }
       return total;
     }, 0);
+  };
+
+  const getUniqueVitrageTypes = (): string[] => {
+    const types = new Set<string>();
+    vitrages.forEach(vitrage => {
+      if (vitrage.name) {
+        types.add(vitrage.name);
+      }
+    });
+    return Array.from(types).sort();
+  };
+
+  const getUniqueSegmentTypes = (): string[] => {
+    const types = new Set<string>();
+    vitrages.forEach(vitrage => {
+      vitrage.segments?.forEach(segment => {
+        if (segment.type) {
+          types.add(segment.type);
+        }
+      });
+    });
+    return Array.from(types).sort();
+  };
+
+  const getUniqueSegmentsCounts = (): number[] => {
+    const counts = new Set<number>();
+    vitrages.forEach(vitrage => {
+      const count = vitrage.rows * vitrage.cols;
+      counts.add(count);
+    });
+    return Array.from(counts).sort((a, b) => a - b);
+  };
+
+  const resetFilters = () => {
+    setFilterVitrageType('all');
+    setFilterSegmentsCount('all');
+    setSearchQuery('');
   };
 
   const handleVitrageClick = (vitrage: VitrageItem) => {
@@ -323,7 +387,9 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
     <div className={`vitrage-specification-new ${selectedVitrageForDetails ? 'with-panel' : ''}`}>
       <div className="main-content-wrapper">
         <div className="specification-header">
-          <h2>Спецификация Витражей</h2>
+          <div className="header-left">
+            <h2>Типовые витражи</h2>
+          </div>
           <div className="header-filters">
             <div className="storage-indicator" title={storageSource === 'supabase' ? 'Данные из облака (Supabase)' : 'Локальные данные (localStorage)'}>
               {storageSource === 'supabase' ? '☁️' : '📦'}
@@ -334,6 +400,51 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
                 <span className="object-info-name">{selectedObject.name}</span>
               </div>
             )}
+
+            {/* Поиск */}
+            <div className="header-filter-item">
+              <input
+                type="text"
+                placeholder="🔍 Поиск витражей..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="header-search-input"
+              />
+            </div>
+
+            {/* Фильтр по типу витража */}
+            <div className="header-filter-item">
+              <select
+                value={filterVitrageType}
+                onChange={(e) => setFilterVitrageType(e.target.value)}
+                className="header-filter-select"
+              >
+                <option value="all">Все витражи</option>
+                {getUniqueVitrageTypes().map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Фильтр по количеству сегментов */}
+            <div className="header-filter-item">
+              <select
+                value={filterSegmentsCount}
+                onChange={(e) => setFilterSegmentsCount(e.target.value)}
+                className="header-filter-select"
+              >
+                <option value="all">Все размеры</option>
+                {getUniqueSegmentsCounts().map(count => (
+                  <option key={count} value={count}>{count} сегментов</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Кнопка сброса фильтров */}
+            <button className="reset-filters-btn-header" onClick={resetFilters} title="Сбросить все фильтры">
+              ✕
+            </button>
+
             <div className="export-dropdown">
               <button
                 className="export-data-btn"
