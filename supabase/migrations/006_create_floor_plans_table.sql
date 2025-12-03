@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS floor_plans (
   floor INTEGER NOT NULL, -- Floor number (can be negative for underground floors)
   name VARCHAR(255) NOT NULL, -- Display name for the plan
   description TEXT, -- Optional description
-
   -- Image data (can store either URL or base64)
   image_url TEXT, -- URL to the image if stored externally
   image_data TEXT, -- Base64 encoded image data if stored directly

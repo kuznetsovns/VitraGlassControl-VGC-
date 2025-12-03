@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { vitrageStorage } from '../../services/vitrageStorage'
 import './VitrageSpecification.css'
 
 export interface VitrageGrid {
@@ -55,23 +56,34 @@ export default function VitrageSpecification() {
   const [selectedVitrage, setSelectedVitrage] = useState<VitrageGrid | null>(null)
 
   useEffect(() => {
-    // Загружаем витражи из localStorage (в будущем можно заменить на API)
-    const savedVitrages = localStorage.getItem('saved-vitrages')
-    if (savedVitrages) {
+    // Загружаем витражи через единый сервис (Supabase или localStorage)
+    const loadVitrages = async () => {
       try {
-        const parsed = JSON.parse(savedVitrages)
-        console.log('Загруженные витражи из localStorage:', parsed)
-        setVitrages(parsed.map((v: any) => {
-          console.log('Витраж:', v.name, 'Начальник участка:', v.siteManager, 'Дата создания:', v.creationDate)
-          return {
-            ...v,
-            createdAt: new Date(v.createdAt)
-          }
+        const { data, source } = await vitrageStorage.getAll()
+        console.log(`📋 Витражи загружены из ${source}:`, data.length)
+
+        // Преобразуем данные в формат VitrageGrid
+        const vitrageGrids: VitrageGrid[] = data.map((v) => ({
+          id: v.id,
+          name: v.name,
+          siteManager: v.siteManager,
+          creationDate: v.creationDate,
+          rows: v.rows,
+          cols: v.cols,
+          segments: v.segments || [],
+          totalWidth: v.totalWidth,
+          totalHeight: v.totalHeight,
+          profileWidth: 12,
+          createdAt: new Date(v.createdAt)
         }))
+
+        setVitrages(vitrageGrids)
       } catch (error) {
         console.error('Ошибка при загрузке витражей:', error)
       }
     }
+
+    loadVitrages()
   }, [])
 
   const getTypeLabel = (type: string): string => {

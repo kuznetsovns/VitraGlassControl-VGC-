@@ -180,7 +180,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       // Преобразуем данные в формат VitrageGrid
       const vitrageGrids: VitrageGrid[] = data.map((v) => ({
         id: v.id,
-        name: v.marking,
+        name: v.name,  // Используем name вместо marking
         rows: v.rows,
         cols: v.cols,
         segments: v.segments || [],
