@@ -47,6 +47,12 @@ CREATE INDEX IF NOT EXISTS idx_floor_plans_object_corpus_floor ON floor_plans(ob
 -- Enable Row Level Security
 ALTER TABLE floor_plans ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Floor plans are viewable by everyone" ON floor_plans;
+DROP POLICY IF EXISTS "Anyone can create floor plans" ON floor_plans;
+DROP POLICY IF EXISTS "Anyone can update floor plans" ON floor_plans;
+DROP POLICY IF EXISTS "Anyone can delete floor plans" ON floor_plans;
+
 -- Create RLS policies for floor_plans
 -- Policy: Anyone can read floor plans
 CREATE POLICY "Floor plans are viewable by everyone"
