@@ -59,7 +59,7 @@ export default function ObjectPage() {
 
     if (department) {
       // Navigate to department with object context
-      const section = department === 'УОК' ? 'vitrage-visualizer' : 'order-form'
+      const section = department === 'УОК' ? 'vitrage-constructor' : 'order-form'
       navigate(`/object/${object.id}/department/${department}/${section}`)
     }
   }

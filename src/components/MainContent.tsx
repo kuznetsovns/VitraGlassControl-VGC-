@@ -5,6 +5,7 @@ import DefectTracking from './DefectTracking/DefectTracking'
 import FloorPlanEditor from './FloorPlanEditor/FloorPlanEditor'
 import FacadePlanEditor from './FacadePlanEditor/FacadePlanEditor'
 import VitrageVisualizer from './VitrageVisualizer/VitrageVisualizer'
+import VitrageConstructor from './VitrageConstructor'
 import MainPage from './MainPage'
 import type { Department } from './Layout'
 import './MainContent.css'
@@ -51,6 +52,13 @@ export default function MainContent({ activeSection, onSectionChange, onDepartme
         return (
           <div className="content-section">
             <VitrageVisualizer selectedObject={selectedObject} />
+          </div>
+        )
+
+      case 'vitrage-constructor':
+        return (
+          <div className="content-section fullscreen-section">
+            <VitrageConstructor selectedObject={selectedObject} />
           </div>
         )
 
