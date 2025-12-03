@@ -126,7 +126,7 @@ export default function VitrageSpecification() {
   return (
     <div className="vitrage-specification">
       <div className="specification-header">
-        <h2>Спецификация витражей</h2>
+        <h2>Типовые витражи</h2>
         <div className="vitrage-stats">
           Создано витражей: <strong>{vitrages.length}</strong>
           {vitrages.length > 0 && (

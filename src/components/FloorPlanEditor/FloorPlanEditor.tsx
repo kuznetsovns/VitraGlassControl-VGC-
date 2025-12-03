@@ -1839,7 +1839,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                   Нет сохраненных витражей
                 </p>
                 <p style={{fontSize: '14px', opacity: 0.8}}>
-                  Перейдите во вкладку "Спецификация витражей" для создания витражей
+                  Перейдите во вкладку "Типовые витражи" для создания витражей
                 </p>
               </div>
             )}

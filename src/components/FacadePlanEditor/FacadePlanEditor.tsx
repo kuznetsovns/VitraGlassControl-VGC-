@@ -1452,7 +1452,7 @@ export default function FacadePlanEditor({ width, height }: FacadePlanEditorProp
                   Нет сохраненных витражей
                 </p>
                 <p style={{fontSize: '14px', opacity: 0.8}}>
-                  Перейдите во вкладку "Спецификация витражей" для создания витражей
+                  Перейдите во вкладку "Типовые витражи" для создания витражей
                 </p>
               </div>
             )}
