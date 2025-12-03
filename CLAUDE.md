@@ -136,11 +136,15 @@ interface PlacedVitrage {
   - Refactor before adding new features
 
 ### Git Operations
+- **NEVER create commits automatically**: Only create git commits when explicitly requested by the user
+  - Wait for explicit requests like: "сделай коммит", "создай коммит", "закоммить", "commit changes", "push changes"
+  - Do NOT automatically commit after completing tasks
+  - Do NOT commit as part of task completion unless specifically asked
 - **Always push to main**: When asked to push/commit changes to GitHub, ALWAYS use `origin/main` branch
   - Use: `git push origin main` (not other branches)
   - If on different branch, switch to main first: `git checkout main`
   - Never create feature branches unless explicitly requested
-  - Default flow: `git add .` → `git commit -m "message"` → `git push origin main`
+  - Default flow (when requested): `git add .` → `git commit -m "message"` → `git push origin main`
 
 ### Navigation
 - Use `navigate()` for programmatic navigation
