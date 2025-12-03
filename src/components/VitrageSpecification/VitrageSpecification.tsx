@@ -56,6 +56,11 @@ interface SpecificationItem {
 export default function VitrageSpecification() {
   const [vitrages, setVitrages] = useState<VitrageGrid[]>([])
   const [selectedVitrage, setSelectedVitrage] = useState<VitrageGrid | null>(null)
+  const [filterType, setFilterType] = useState<string>('all')
+  const [filterMinArea, setFilterMinArea] = useState<number>(0)
+  const [filterMaxArea, setFilterMaxArea] = useState<number>(1000)
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('')
+  const [filterDateTo, setFilterDateTo] = useState<string>('')
 
   useEffect(() => {
     // Загружаем витражи через единый сервис (Supabase или localStorage)
@@ -150,6 +155,57 @@ export default function VitrageSpecification() {
       }, 0)
   }
 
+  const getUniqueSegmentTypes = (): string[] => {
+    const types = new Set<string>()
+    vitrages.forEach(vitrage => {
+      vitrage.segments.forEach(segment => {
+        if (!segment.merged && !segment.hidden) {
+          types.add(segment.type)
+        }
+      })
+    })
+    return Array.from(types).sort()
+  }
+
+  const filteredVitrages = vitrages.filter(vitrage => {
+    const totalArea = getTotalArea(vitrage)
+    const createdDate = new Date(vitrage.createdAt)
+
+    // Фильтр по типу элемента
+    if (filterType !== 'all') {
+      const hasType = vitrage.segments.some(s => s.type === filterType && !s.merged && !s.hidden)
+      if (!hasType) return false
+    }
+
+    // Фильтр по площади
+    if (totalArea < filterMinArea || totalArea > filterMaxArea) {
+      return false
+    }
+
+    // Фильтр по дате начала
+    if (filterDateFrom) {
+      const dateFrom = new Date(filterDateFrom)
+      if (createdDate < dateFrom) return false
+    }
+
+    // Фильтр по дате конца
+    if (filterDateTo) {
+      const dateTo = new Date(filterDateTo)
+      dateTo.setHours(23, 59, 59, 999)
+      if (createdDate > dateTo) return false
+    }
+
+    return true
+  })
+
+  const resetFilters = () => {
+    setFilterType('all')
+    setFilterMinArea(0)
+    setFilterMaxArea(1000)
+    setFilterDateFrom('')
+    setFilterDateTo('')
+  }
+
   return (
     <div className="vitrage-specification">
       <div className="specification-header">
@@ -167,14 +223,85 @@ export default function VitrageSpecification() {
       <div className="specification-content">
         <div className="vitrages-list">
           <h3>Список витражей</h3>
+
+          <div className="filters-panel">
+            <div className="filters-header">
+              <h4>Фильтры</h4>
+              <button className="reset-filters-btn" onClick={resetFilters}>Очистить</button>
+            </div>
+
+            <div className="filter-group">
+              <label>По типу элемента:</label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="filter-select"
+              >
+                <option value="all">Все типы</option>
+                {getUniqueSegmentTypes().map(type => (
+                  <option key={type} value={type}>{getTypeLabel(type)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label>Площадь (м²):</label>
+              <div className="filter-range">
+                <input
+                  type="number"
+                  min="0"
+                  max="1000"
+                  value={filterMinArea}
+                  onChange={(e) => setFilterMinArea(Number(e.target.value))}
+                  placeholder="От"
+                  className="filter-input"
+                />
+                <span className="range-sep">—</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1000"
+                  value={filterMaxArea}
+                  onChange={(e) => setFilterMaxArea(Number(e.target.value))}
+                  placeholder="До"
+                  className="filter-input"
+                />
+              </div>
+            </div>
+
+            <div className="filter-group">
+              <label>Дата создания:</label>
+              <div className="filter-date-range">
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  className="filter-input"
+                />
+                <span className="range-sep">—</span>
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={(e) => setFilterDateTo(e.target.value)}
+                  className="filter-input"
+                />
+              </div>
+            </div>
+          </div>
+
           {vitrages.length === 0 ? (
             <div className="empty-state">
               <p>Витражи не созданы</p>
               <p>Перейдите на вкладку "Отрисовка витражей с размерами" для создания витража</p>
             </div>
+          ) : filteredVitrages.length === 0 ? (
+            <div className="empty-state">
+              <p>Витражи не найдены</p>
+              <p>Измените параметры фильтра</p>
+            </div>
           ) : (
             <div className="vitrages-grid">
-              {vitrages.map((vitrage) => (
+              {filteredVitrages.map((vitrage) => (
                 <div 
                   key={vitrage.id} 
                   className={`vitrage-card ${selectedVitrage?.id === vitrage.id ? 'selected' : ''}`}
