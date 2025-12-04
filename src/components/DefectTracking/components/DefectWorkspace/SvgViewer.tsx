@@ -56,7 +56,7 @@ export function SvgViewer({
         <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
           <p style={{ fontSize: '18px', marginBottom: '10px' }}>⚠️ Отрисовка недоступна</p>
           <p style={{ fontSize: '14px' }}>Витраж был создан в старой версии и не содержит данных отрисовки.</p>
-          <p style={{ fontSize: '14px' }}>Пересоздайте витраж в Визуализаторе для просмотра отрисовки.</p>
+          <p style={{ fontSize: '14px' }}>Пересоздайте витраж в Конструкторе или Визуализаторе для просмотра отрисовки.</p>
         </div>
       )}
     </div>
