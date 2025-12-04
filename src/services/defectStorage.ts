@@ -282,7 +282,7 @@ export const defectStorage = {
         .eq('vitrage_id', vitrageId)
         .eq('segment_index', segmentIndex)
         .eq('inspection_date', data.inspectionDate)
-        .single();
+        .maybeSingle();
 
       let segmentDefectId: string;
 

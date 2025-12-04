@@ -122,7 +122,7 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
     setShowPropertiesPanel(false)
   }
 
-  // Генерация SVG для сохранения витража
+  // Генерация SVG для сохранения витража (с полным визуалом как в редакторе)
   const generateVitrageSVG = (): string => {
     const cols = config.horizontalSegments
     const rows = config.verticalSegments
@@ -152,6 +152,22 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
     const viewBoxHeight = totalHeight + padding * 2
 
     let svgContent = `<svg width="${viewBoxWidth}" height="${viewBoxHeight}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}" xmlns="http://www.w3.org/2000/svg">`
+
+    // Добавляем defs для clipPath
+    svgContent += '<defs>'
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const segmentId = `${row}-${col}`
+        if (isSegmentHidden(segmentId)) continue
+        const x = padding + columnWidths.slice(0, col).reduce((sum, w) => sum + w, 0)
+        const y = padding + rowHeights.slice(0, row).reduce((sum, h) => sum + h, 0)
+        const w = columnWidths[col]
+        const h = rowHeights[row]
+        svgContent += `<clipPath id="clip-svg-${segmentId}"><rect x="${x + 2}" y="${y + 2}" width="${Math.max(w - 4, 10)}" height="${Math.max(h - 4, 10)}" rx="4"/></clipPath>`
+      }
+    }
+    svgContent += '</defs>'
+
     svgContent += `<rect x="${padding}" y="${padding}" width="${totalWidth}" height="${totalHeight}" fill="none" stroke="#2c3e50" stroke-width="4"/>`
 
     const cumulativeX: number[] = [padding]
@@ -198,20 +214,79 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
           for (let r = minRow; r <= maxRow; r++) segHeight += rowHeights[r]
         }
 
-        let fillColor = 'rgba(211, 211, 211, 0.2)'
         const fillType = props?.fillType || 'Пустой'
-        if (fillType === 'Стеклопакет') fillColor = 'rgba(135, 206, 235, 0.2)'
-        else if (fillType === 'Глухое остекление') fillColor = 'rgba(147, 112, 219, 0.2)'
-        else if (fillType === 'Открывающееся окно') fillColor = 'rgba(144, 238, 144, 0.2)'
-        else if (fillType === 'Дверь') fillColor = 'rgba(139, 69, 19, 0.2)'
-        else if (fillType === 'Вентиляция') fillColor = 'rgba(0, 206, 209, 0.2)'
-
-        // Используем числовой segmentId для совместимости с Дефектовкой (как в VitrageVisualizer)
         const numericSegmentId = row * cols + col + 1
-        svgContent += `<rect x="${x}" y="${y}" width="${segWidth}" height="${segHeight}" fill="${fillColor}" stroke="#87ceeb" stroke-width="2" data-segment-id="${numericSegmentId}" class="vitrage-segment" style="cursor: pointer;"/>`
-
         const label = props?.label || `${numericSegmentId}`
-        svgContent += `<text x="${x + segWidth / 2}" y="${y + segHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="#2c3e50" font-weight="600" pointer-events="none">${label}</text>`
+        const centerX = x + segWidth / 2
+        const centerY = y + segHeight / 2
+
+        // Получаем цвета в зависимости от типа
+        let fillColor = '#f5f5f5'
+        let strokeColor = '#9e9e9e'
+        if (fillType === 'Стеклопакет') { fillColor = '#e3f2fd'; strokeColor = '#1565c0' }
+        else if (fillType === 'Глухое остекление') { fillColor = '#e1bee7'; strokeColor = '#7b1fa2' }
+        else if (fillType === 'Открывающееся окно') { fillColor = '#c8e6c9'; strokeColor = '#388e3c' }
+        else if (fillType === 'Дверь') { fillColor = '#ffecb3'; strokeColor = '#f57c00' }
+        else if (fillType === 'Вентиляция') { fillColor = '#b2ebf2'; strokeColor = '#00838f' }
+
+        // Рисуем прямоугольник сегмента
+        svgContent += `<rect x="${x}" y="${y}" width="${segWidth}" height="${segHeight}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" rx="4" data-segment-id="${numericSegmentId}" class="vitrage-segment" style="cursor: pointer;"/>`
+
+        // Рисуем содержимое в зависимости от типа заполнения
+        switch (fillType) {
+          case 'Открывающееся окно':
+            svgContent += `<line x1="${x + 10}" y1="${y + 10}" x2="${x + segWidth - 10}" y2="${y + segHeight - 10}" stroke="#388e3c" stroke-width="2"/>`
+            svgContent += `<polygon points="${centerX},${y + 20} ${centerX - 20},${y + segHeight - 20} ${centerX + 20},${y + segHeight - 20}" fill="none" stroke="#388e3c" stroke-width="2"/>`
+            svgContent += `<text x="${centerX}" y="${y + 15}" text-anchor="middle" font-size="10" fill="#388e3c" pointer-events="none">${label}</text>`
+            break
+
+          case 'Дверь':
+            const doorHeight = Math.max(segHeight - 30, 20)
+            svgContent += `<rect x="${centerX - 15}" y="${y + 15}" width="30" height="${doorHeight}" fill="none" stroke="#f57c00" stroke-width="2"/>`
+            svgContent += `<path d="M ${centerX - 15} ${y + 15 + doorHeight} Q ${centerX - 30} ${centerY} ${centerX - 15} ${y + 15}" fill="none" stroke="#f57c00" stroke-width="1.5" stroke-dasharray="4,2"/>`
+            svgContent += `<circle cx="${centerX + 8}" cy="${centerY}" r="3" fill="#f57c00"/>`
+            svgContent += `<text x="${centerX}" y="${y + 12}" text-anchor="middle" font-size="10" fill="#f57c00" pointer-events="none">${label}</text>`
+            break
+
+          case 'Вентиляция':
+            const lineCount = Math.max(3, Math.floor(segWidth / 20))
+            const lineSpacing = segWidth / (lineCount + 1)
+            for (let i = 0; i < lineCount; i++) {
+              svgContent += `<line x1="${x + lineSpacing * (i + 1)}" y1="${y + 15}" x2="${x + lineSpacing * (i + 1)}" y2="${y + segHeight - 15}" stroke="#00838f" stroke-width="2"/>`
+            }
+            svgContent += `<text x="${centerX}" y="${y + 12}" text-anchor="middle" font-size="10" fill="#00838f" pointer-events="none">${label}</text>`
+            break
+
+          case 'Глухое остекление':
+            const maxDimension = Math.max(segWidth, segHeight) * 2
+            svgContent += `<g clip-path="url(#clip-svg-${segmentId})">`
+            for (let offset = 0; offset < maxDimension; offset += 15) {
+              svgContent += `<line x1="${x - segHeight + offset}" y1="${y}" x2="${x + offset}" y2="${y + segHeight}" stroke="#7b1fa2" stroke-width="1" stroke-dasharray="6,3,2,3"/>`
+            }
+            svgContent += '</g>'
+            svgContent += `<text x="${centerX}" y="${y + 15}" text-anchor="middle" font-size="10" fill="#7b1fa2" pointer-events="none">${label}</text>`
+            break
+
+          case 'Стеклопакет':
+            const colsCount = Math.max(2, Math.floor(segWidth / 35))
+            const rowsCount = Math.max(2, Math.floor(segHeight / 35))
+            const contentHeight = Math.max(segHeight - 30, 20)
+            for (let r = 0; r < rowsCount; r++) {
+              for (let c = 0; c < colsCount; c++) {
+                const cx = x + (segWidth / (colsCount + 1)) * (c + 1)
+                const cy = y + 20 + (contentHeight / rowsCount) * (r + 0.5)
+                svgContent += `<line x1="${cx - 4}" y1="${cy - 4}" x2="${cx - 4}" y2="${cy + 4}" stroke="#1565c0" stroke-width="1.5"/>`
+                svgContent += `<line x1="${cx}" y1="${cy - 4}" x2="${cx}" y2="${cy + 4}" stroke="#1565c0" stroke-width="1.5"/>`
+                svgContent += `<line x1="${cx + 4}" y1="${cy - 4}" x2="${cx + 4}" y2="${cy + 4}" stroke="#1565c0" stroke-width="1.5"/>`
+              }
+            }
+            svgContent += `<text x="${centerX}" y="${y + 15}" text-anchor="middle" font-size="10" fill="#1565c0" pointer-events="none">${label}</text>`
+            break
+
+          default:
+            // Пустой - только текст
+            svgContent += `<text x="${centerX}" y="${centerY}" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="${strokeColor}" pointer-events="none">${label}</text>`
+        }
       }
     }
 
@@ -894,9 +969,9 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
             </button>
           </div>
           {selectedObject && (
-            <div className="vitrage-constructor-object">
-              <span className="object-label">Объект:</span>
-              <span className="object-name">{selectedObject.name}</span>
+            <div className="object-info-badge">
+              <span className="object-info-label">Объект:</span>
+              <span className="object-info-name">{selectedObject.name}</span>
             </div>
           )}
         </header>
@@ -1084,9 +1159,9 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
       <header className="vitrage-constructor-header">
         <h1 className="vitrage-constructor-title">Конструктор Витражей</h1>
         {selectedObject && (
-          <div className="vitrage-constructor-object">
-            <span className="object-label">Объект:</span>
-            <span className="object-name">{selectedObject.name}</span>
+          <div className="object-info-badge">
+            <span className="object-info-label">Объект:</span>
+            <span className="object-info-name">{selectedObject.name}</span>
           </div>
         )}
       </header>
