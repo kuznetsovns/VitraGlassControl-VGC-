@@ -987,9 +987,11 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
         ctx.stroke()
       }
 
-      // Draw vitrage name
+      // Draw vitrage name with adaptive font size
       ctx.fillStyle = '#333'
-      ctx.font = 'bold 14px Arial'
+      // Adjust font size based on vitrage scale to keep text readable
+      const fontSize = Math.max(12, Math.min(24, 14 / placedVitrage.scale))
+      ctx.font = `bold ${fontSize}px Arial`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(
@@ -1048,22 +1050,24 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
         ctx.stroke()
       }
       
-      // Draw vitrage name
+      // Draw vitrage name with adaptive font size
       ctx.globalAlpha = 0.8
       ctx.fillStyle = '#1976d2'
-      ctx.font = 'bold 14px Arial'
+      // Use larger font size for preview (scale is 0.5)
+      const previewFontSize = Math.max(12, Math.min(24, 14 / 0.5))
+      ctx.font = `bold ${previewFontSize}px Arial`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.setLineDash([]) // Solid text
       ctx.fillText(
-        vitrage.name, 
-        displayWidth / 2, 
+        vitrage.name,
+        displayWidth / 2,
         displayHeight / 2
       )
-      
-      // Draw "click to place" hint
+
+      // Draw "click to place" hint with larger font
       ctx.fillStyle = '#666'
-      ctx.font = '10px Arial'
+      ctx.font = `${Math.max(10, 10 / 0.5)}px Arial`
       ctx.fillText(
         'Нажмите для размещения',
         displayWidth / 2,
@@ -1905,11 +1909,11 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       {showVitrageSelector && (
         <div className="modal-overlay">
           <div className="modal large">
-            <h3>Выберите витраж из спецификации</h3>
+            <h3>Выберите витраж со страницы "Типовые витражи"</h3>
             {savedVitrages.length > 0 ? (
               <>
                 <p style={{marginBottom: '16px'}}>
-                  Выберите витраж из списка для размещения на плане этажа
+                  Выберите витраж из базы данных типовых витражей для размещения на плане этажа
                 </p>
                 <div className="vitrage-grid">
                   {savedVitrages.map(vitrage => (
@@ -1937,10 +1941,11 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
             ) : (
               <div style={{padding: '40px', textAlign: 'center'}}>
                 <p style={{marginBottom: '16px', fontSize: '16px', fontWeight: '600'}}>
-                  Нет сохраненных витражей
+                  В базе данных нет типовых витражей
                 </p>
                 <p style={{fontSize: '14px', opacity: 0.8}}>
-                  Перейдите во вкладку "Типовые витражи" для создания витражей
+                  Перейдите на страницу "Типовые витражи" или "Конструктор витражей" для создания витражей.<br/>
+                  Витражи автоматически сохраняются в единую базу данных и будут доступны здесь.
                 </p>
               </div>
             )}
