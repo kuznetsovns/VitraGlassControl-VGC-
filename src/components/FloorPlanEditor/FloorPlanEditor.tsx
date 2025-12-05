@@ -3,6 +3,9 @@ import './FloorPlanEditor.css'
 import { floorPlanStorage, type FloorPlanData } from '../../services/floorPlanStorage'
 import { vitrageStorage } from '../../services/vitrageStorage'
 import { placedVitrageStorage, type PlacedVitrageData } from '../../services/placedVitrageStorage'
+import { DefectWorkspace } from '../DefectTracking/components/DefectWorkspace/DefectWorkspace'
+import { useDefectData } from '../DefectTracking/hooks/useDefectData'
+import type { VitrageItem } from '../DefectTracking/types'
 
 // Re-define VitrageGrid interface locally since it's not exported from GraphicsEditor
 interface VitrageGrid {
@@ -117,6 +120,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [planToDuplicate, setPlanToDuplicate] = useState<FloorPlan | null>(null)
   const [vitrageSearchQuery, setVitrageSearchQuery] = useState('')
+  const [selectedVitrageForDefect, setSelectedVitrageForDefect] = useState<VitrageItem | null>(null)
 
   // Vitrage ID state
   const [vitrageIDData, setVitrageIDData] = useState<VitrageID>({
@@ -167,6 +171,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     floor: 1
   })
   
+  // Defect tracking hook
+  const defectData = useDefectData(selectedObject)
+
   // Filter state
   const [filters, setFilters] = useState({
     name: '',
@@ -1277,6 +1284,120 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     setShowVitrageIDDialog(true)
   }
 
+  // Generate simple SVG for old vitrages without svgDrawing
+  const generateSimpleSVG = (vitrage: VitrageGrid, segmentIDs: SegmentIDMapping): string => {
+    const cols = vitrage.cols
+    const rows = vitrage.rows
+    const cellWidth = vitrage.totalWidth / cols
+    const cellHeight = vitrage.totalHeight / rows
+    const padding = 50
+    const totalWidth = vitrage.totalWidth + padding * 2
+    const totalHeight = vitrage.totalHeight + padding * 2
+
+    let svgContent = `<svg width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}" xmlns="http://www.w3.org/2000/svg">`
+
+    // Внешняя рамка
+    svgContent += `<rect x="${padding}" y="${padding}" width="${vitrage.totalWidth}" height="${vitrage.totalHeight}" fill="none" stroke="#2c3e50" stroke-width="4"/>`
+
+    // Сетка сегментов
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const x = padding + col * cellWidth
+        const y = padding + row * cellHeight
+        const segmentId = `segment-${row}-${col}`
+
+        // Get full ID for this segment
+        const segmentIDData = segmentIDs[segmentId]
+        const displayText = segmentIDData ? generateFullID(segmentIDData) : `${row * cols + col + 1}`
+
+        svgContent += `<rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" fill="rgba(135, 206, 235, 0.2)" stroke="#87ceeb" stroke-width="2" data-segment-id="${segmentId}" class="vitrage-segment" style="cursor: pointer;"/>`
+
+        // Display segment ID with text wrapping
+        if (displayText.length > 20) {
+          // Split long IDs into 2 lines at approximately middle
+          const parts = displayText.split('-')
+          const midPoint = Math.ceil(parts.length / 2)
+          const line1 = parts.slice(0, midPoint).join('-')
+          const line2 = parts.slice(midPoint).join('-')
+
+          const fontSize = Math.min(9, cellHeight / 4, cellWidth / Math.max(line1.length, line2.length) * 1.5)
+          const lineHeight = fontSize * 1.3
+          const startY = y + cellHeight / 2 - lineHeight / 2
+
+          svgContent += `<text x="${x + cellWidth / 2}" y="${startY}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#2c3e50" font-weight="600" pointer-events="none">${line1}</text>`
+          svgContent += `<text x="${x + cellWidth / 2}" y="${startY + lineHeight}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#2c3e50" font-weight="600" pointer-events="none">${line2}</text>`
+        } else {
+          // Short text - display in one line
+          const fontSize = Math.min(10, cellHeight / 3, cellWidth / displayText.length * 1.5)
+          svgContent += `<text x="${x + cellWidth / 2}" y="${y + cellHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#2c3e50" font-weight="600" pointer-events="none">${displayText}</text>`
+        }
+      }
+    }
+
+    svgContent += '</svg>'
+    return svgContent
+  }
+
+  // Open defect tracking for selected vitrage
+  const openDefectTracking = () => {
+    if (!selectedItem || !currentPlan) return
+
+    const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
+    if (!placedVitrage) return
+
+    const vitrage = savedVitrages.find(v => v.id === placedVitrage.vitrageId)
+    if (!vitrage) return
+
+    // Check if all segments have IDs assigned
+    const totalSegments = vitrage.rows * vitrage.cols
+    const assignedSegments = placedVitrage.segmentIDs ? Object.keys(placedVitrage.segmentIDs).length : 0
+
+    if (assignedSegments < totalSegments) {
+      alert(`⚠️ Необходимо задать ID для всех секций витража!\n\nЗадано ID: ${assignedSegments} из ${totalSegments} секций.\nПожалуйста, сначала задайте ID для всех секций витража, затем создавайте дефектовку.`)
+      return
+    }
+
+    // Generate SVG if not present (for old vitrages)
+    const svgDrawing = generateSimpleSVG(vitrage, placedVitrage.segmentIDs || {})
+
+    // Convert VitrageGrid to VitrageItem format with segment IDs
+    const vitrageItem: VitrageItem = {
+      id: vitrage.id,
+      name: vitrage.name,
+      objectId: selectedObject?.id || '',
+      objectName: selectedObject?.name || '',
+      rows: vitrage.rows,
+      cols: vitrage.cols,
+      totalWidth: vitrage.totalWidth,
+      totalHeight: vitrage.totalHeight,
+      segments: vitrage.segments.map((seg: any, index: number) => {
+        // Calculate row and col from index
+        const row = Math.floor(index / vitrage.cols)
+        const col = index % vitrage.cols
+        const segmentId = `segment-${row}-${col}`
+        const segmentIDData = placedVitrage.segmentIDs?.[segmentId]
+
+        return {
+          id: segmentIDData ? generateFullID(segmentIDData) : segmentId,
+          type: seg.type || 'glass',
+          width: seg.realWidth,
+          height: seg.realHeight,
+          formula: seg.formula,
+          label: seg.label,
+          hidden: seg.hidden,
+          merged: seg.merged,
+          rowSpan: seg.rowSpan,
+          colSpan: seg.colSpan,
+          mergedInto: seg.mergedInto
+        }
+      }),
+      svgDrawing: svgDrawing, // Add generated SVG
+      createdAt: vitrage.createdAt
+    }
+
+    setSelectedVitrageForDefect(vitrageItem)
+  }
+
   // Select segment for ID editing
   const selectSegmentForID = (segmentId: string) => {
     setSelectedSegmentForID(segmentId)
@@ -1418,6 +1539,31 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     ].filter(p => p) // Remove empty parts
 
     return parts.join('-')
+  }
+
+  // If defect tracking is open, render DefectWorkspace
+  if (selectedVitrageForDefect) {
+    return (
+      <DefectWorkspace
+        vitrage={selectedVitrageForDefect}
+        onBack={() => {
+          setSelectedVitrageForDefect(null)
+          // Force canvas redraw after closing defect tracking
+          setTimeout(() => draw(), 0)
+        }}
+        onSaveAndBack={() => {
+          alert('Дефекты успешно сохранены!')
+          setSelectedVitrageForDefect(null)
+          // Force canvas redraw after closing defect tracking
+          setTimeout(() => draw(), 0)
+        }}
+        availableDefects={defectData.availableDefects}
+        segmentDefectsData={defectData.segmentDefectsData}
+        loadSegmentData={defectData.loadSegmentData}
+        saveSegmentData={defectData.saveSegmentData}
+        addNewDefect={defectData.addNewDefect}
+      />
+    )
   }
 
   return (
@@ -1677,6 +1823,31 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                               onClick={openVitrageIDDialog}
                             >
                               {placedVitrage.segmentIDs && Object.keys(placedVitrage.segmentIDs).length > 0 ? '✏️ Изменить ID секций' : '🆔 Задать ID секций'}
+                            </button>
+                            <button
+                              className="secondary"
+                              style={{
+                                marginTop: '8px',
+                                width: '100%',
+                                background: (placedVitrage.segmentIDs && Object.keys(placedVitrage.segmentIDs).length === vitrage.rows * vitrage.cols)
+                                  ? 'linear-gradient(135deg, #f44336 0%, #e91e63 100%)'
+                                  : 'linear-gradient(135deg, #9e9e9e 0%, #757575 100%)',
+                                color: '#fff',
+                                cursor: (placedVitrage.segmentIDs && Object.keys(placedVitrage.segmentIDs).length === vitrage.rows * vitrage.cols)
+                                  ? 'pointer'
+                                  : 'not-allowed',
+                                opacity: (placedVitrage.segmentIDs && Object.keys(placedVitrage.segmentIDs).length === vitrage.rows * vitrage.cols)
+                                  ? 1
+                                  : 0.6
+                              }}
+                              onClick={openDefectTracking}
+                            >
+                              📋 Создать дефектовку
+                              {placedVitrage.segmentIDs && Object.keys(placedVitrage.segmentIDs).length < vitrage.rows * vitrage.cols && (
+                                <span style={{display: 'block', fontSize: '11px', marginTop: '4px', opacity: 0.9}}>
+                                  (ID: {placedVitrage.segmentIDs ? Object.keys(placedVitrage.segmentIDs).length : 0}/{vitrage.rows * vitrage.cols})
+                                </span>
+                              )}
                             </button>
                             <button
                               className="secondary"

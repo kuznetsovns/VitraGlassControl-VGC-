@@ -6,14 +6,28 @@ interface SegmentInfoProps {
 }
 
 export function SegmentInfo({ selectedSegmentId, selectedVitrage }: SegmentInfoProps) {
-  const segment = selectedVitrage.segments.find((s, index) => (index + 1).toString() === selectedSegmentId)
+  // selectedSegmentId is in format "segment-0-0", extract row and col
+  const match = selectedSegmentId.match(/segment-(\d+)-(\d+)/)
+  let segment = null
+  let displayId = selectedSegmentId
+
+  if (match) {
+    const row = parseInt(match[1])
+    const col = parseInt(match[2])
+    const index = row * selectedVitrage.cols + col
+    segment = selectedVitrage.segments[index]
+    // Use segment.id which contains the full ID
+    if (segment) {
+      displayId = segment.id
+    }
+  }
 
   return (
     <div className="segment-info">
       <h4>Информация о сегменте</h4>
       <div className="info-row">
         <span className="info-label">ID:</span>
-        <span className="info-value">{selectedSegmentId}</span>
+        <span className="info-value">{displayId}</span>
       </div>
       {segment && (
         <>
