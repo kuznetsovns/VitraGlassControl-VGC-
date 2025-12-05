@@ -24,21 +24,21 @@ export function WorkspaceHeader({
   return (
     <div className="workspace-header">
       <div className="header-left">
-        <h2 className="vitrage-title">{vitrage.name}</h2>
-        {vitrage.siteManager && (
-          <p className="vitrage-subtitle">Начальник участка: {vitrage.siteManager}</p>
-        )}
-        {vitrage.creationDate && (
-          <p className="vitrage-subtitle">Дата создания: {vitrage.creationDate}</p>
-        )}
+        <button className="defect-back-btn" onClick={onBack} title="Вернуться к списку витражей">
+          ← Назад
+        </button>
+        <div className="vitrage-info">
+          <h2 className="vitrage-title">{vitrage.name}</h2>
+          {vitrage.siteManager && (
+            <p className="vitrage-subtitle">Начальник участка: {vitrage.siteManager}</p>
+          )}
+          {vitrage.creationDate && (
+            <p className="vitrage-subtitle">Дата создания: {vitrage.creationDate}</p>
+          )}
+        </div>
       </div>
 
       <div className="header-controls">
-        <button className="action-btn back-btn" onClick={onBack} title="Вернуться к списку">
-          <span className="btn-icon">←</span>
-          <span className="btn-text">Назад к списку</span>
-        </button>
-
         <button
           className={`action-btn save-defects-btn ${hasDefects ? 'has-defects' : ''}`}
           onClick={onSaveAndBack}

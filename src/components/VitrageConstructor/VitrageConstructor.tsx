@@ -54,7 +54,7 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const workspaceRef = useRef<HTMLDivElement>(null)
 
-  // Refs для полей ввода
+  // Refs для полей ввода конфигурации
   const markingRef = useRef<HTMLInputElement>(null)
   const siteManagerRef = useRef<HTMLInputElement>(null)
   const createdDateRef = useRef<HTMLInputElement>(null)
@@ -63,12 +63,42 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
 
   const inputRefs = [markingRef, siteManagerRef, createdDateRef, horizontalRef, verticalRef]
 
+  // Refs для полей свойств сегмента
+  const propFillTypeRef = useRef<HTMLSelectElement>(null)
+  const propLabelRef = useRef<HTMLInputElement>(null)
+  const propFormulaRef = useRef<HTMLInputElement>(null)
+  const propWidthRef = useRef<HTMLInputElement>(null)
+  const propHeightRef = useRef<HTMLInputElement>(null)
+  const propSaveBtnRef = useRef<HTMLButtonElement>(null)
+
+  const propertyRefs = [propFillTypeRef, propLabelRef, propFormulaRef, propWidthRef, propHeightRef, propSaveBtnRef]
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, currentIndex: number) => {
     if (e.key === 'Enter') {
       e.preventDefault()
       const nextIndex = currentIndex + 1
       if (nextIndex < inputRefs.length) {
         inputRefs[nextIndex].current?.focus()
+      } else {
+        // Последнее поле - вызываем создание витража
+        if (config.horizontalSegments > 0 && config.verticalSegments > 0) {
+          handleCreate()
+        }
+      }
+    }
+  }
+
+  // Обработчик Enter для полей свойств сегмента
+  const handlePropertyKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLSelectElement>, currentIndex: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const nextIndex = currentIndex + 1
+      if (nextIndex < propertyRefs.length) {
+        propertyRefs[nextIndex].current?.focus()
+      }
+      // Если последнее поле (высота) - нажимаем кнопку Сохранить
+      if (currentIndex === 4) {
+        closePropertiesPanel()
       }
     }
   }
@@ -92,7 +122,7 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
     setShowPropertiesPanel(false)
   }
 
-  // Генерация SVG для сохранения витража
+  // Генерация SVG для сохранения витража (с полным визуалом как в редакторе)
   const generateVitrageSVG = (): string => {
     const cols = config.horizontalSegments
     const rows = config.verticalSegments
@@ -122,6 +152,22 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
     const viewBoxHeight = totalHeight + padding * 2
 
     let svgContent = `<svg width="${viewBoxWidth}" height="${viewBoxHeight}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}" xmlns="http://www.w3.org/2000/svg">`
+
+    // Добавляем defs для clipPath
+    svgContent += '<defs>'
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const segmentId = `${row}-${col}`
+        if (isSegmentHidden(segmentId)) continue
+        const x = padding + columnWidths.slice(0, col).reduce((sum, w) => sum + w, 0)
+        const y = padding + rowHeights.slice(0, row).reduce((sum, h) => sum + h, 0)
+        const w = columnWidths[col]
+        const h = rowHeights[row]
+        svgContent += `<clipPath id="clip-svg-${segmentId}"><rect x="${x + 2}" y="${y + 2}" width="${Math.max(w - 4, 10)}" height="${Math.max(h - 4, 10)}" rx="4"/></clipPath>`
+      }
+    }
+    svgContent += '</defs>'
+
     svgContent += `<rect x="${padding}" y="${padding}" width="${totalWidth}" height="${totalHeight}" fill="none" stroke="#2c3e50" stroke-width="4"/>`
 
     const cumulativeX: number[] = [padding]
@@ -168,18 +214,79 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
           for (let r = minRow; r <= maxRow; r++) segHeight += rowHeights[r]
         }
 
-        let fillColor = 'rgba(211, 211, 211, 0.2)'
         const fillType = props?.fillType || 'Пустой'
-        if (fillType === 'Стеклопакет') fillColor = 'rgba(135, 206, 235, 0.2)'
-        else if (fillType === 'Глухое остекление') fillColor = 'rgba(147, 112, 219, 0.2)'
-        else if (fillType === 'Открывающееся окно') fillColor = 'rgba(144, 238, 144, 0.2)'
-        else if (fillType === 'Дверь') fillColor = 'rgba(139, 69, 19, 0.2)'
-        else if (fillType === 'Вентиляция') fillColor = 'rgba(0, 206, 209, 0.2)'
+        const numericSegmentId = row * cols + col + 1
+        const label = props?.label || `${numericSegmentId}`
+        const centerX = x + segWidth / 2
+        const centerY = y + segHeight / 2
 
-        svgContent += `<rect x="${x}" y="${y}" width="${segWidth}" height="${segHeight}" fill="${fillColor}" stroke="#87ceeb" stroke-width="2"/>`
+        // Получаем цвета в зависимости от типа
+        let fillColor = '#f5f5f5'
+        let strokeColor = '#9e9e9e'
+        if (fillType === 'Стеклопакет') { fillColor = '#e3f2fd'; strokeColor = '#1565c0' }
+        else if (fillType === 'Глухое остекление') { fillColor = '#e1bee7'; strokeColor = '#7b1fa2' }
+        else if (fillType === 'Открывающееся окно') { fillColor = '#c8e6c9'; strokeColor = '#388e3c' }
+        else if (fillType === 'Дверь') { fillColor = '#ffecb3'; strokeColor = '#f57c00' }
+        else if (fillType === 'Вентиляция') { fillColor = '#b2ebf2'; strokeColor = '#00838f' }
 
-        const label = props?.label || `${row * cols + col + 1}`
-        svgContent += `<text x="${x + segWidth / 2}" y="${y + segHeight / 2}" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="#2c3e50" font-weight="600">${label}</text>`
+        // Рисуем прямоугольник сегмента
+        svgContent += `<rect x="${x}" y="${y}" width="${segWidth}" height="${segHeight}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" rx="4" data-segment-id="${numericSegmentId}" class="vitrage-segment" style="cursor: pointer;"/>`
+
+        // Рисуем содержимое в зависимости от типа заполнения
+        switch (fillType) {
+          case 'Открывающееся окно':
+            svgContent += `<line x1="${x + 10}" y1="${y + 10}" x2="${x + segWidth - 10}" y2="${y + segHeight - 10}" stroke="#388e3c" stroke-width="2"/>`
+            svgContent += `<polygon points="${centerX},${y + 20} ${centerX - 20},${y + segHeight - 20} ${centerX + 20},${y + segHeight - 20}" fill="none" stroke="#388e3c" stroke-width="2"/>`
+            svgContent += `<text x="${centerX}" y="${y + 15}" text-anchor="middle" font-size="10" fill="#388e3c" pointer-events="none">${label}</text>`
+            break
+
+          case 'Дверь':
+            const doorHeight = Math.max(segHeight - 30, 20)
+            svgContent += `<rect x="${centerX - 15}" y="${y + 15}" width="30" height="${doorHeight}" fill="none" stroke="#f57c00" stroke-width="2"/>`
+            svgContent += `<path d="M ${centerX - 15} ${y + 15 + doorHeight} Q ${centerX - 30} ${centerY} ${centerX - 15} ${y + 15}" fill="none" stroke="#f57c00" stroke-width="1.5" stroke-dasharray="4,2"/>`
+            svgContent += `<circle cx="${centerX + 8}" cy="${centerY}" r="3" fill="#f57c00"/>`
+            svgContent += `<text x="${centerX}" y="${y + 12}" text-anchor="middle" font-size="10" fill="#f57c00" pointer-events="none">${label}</text>`
+            break
+
+          case 'Вентиляция':
+            const lineCount = Math.max(3, Math.floor(segWidth / 20))
+            const lineSpacing = segWidth / (lineCount + 1)
+            for (let i = 0; i < lineCount; i++) {
+              svgContent += `<line x1="${x + lineSpacing * (i + 1)}" y1="${y + 15}" x2="${x + lineSpacing * (i + 1)}" y2="${y + segHeight - 15}" stroke="#00838f" stroke-width="2"/>`
+            }
+            svgContent += `<text x="${centerX}" y="${y + 12}" text-anchor="middle" font-size="10" fill="#00838f" pointer-events="none">${label}</text>`
+            break
+
+          case 'Глухое остекление':
+            const maxDimension = Math.max(segWidth, segHeight) * 2
+            svgContent += `<g clip-path="url(#clip-svg-${segmentId})">`
+            for (let offset = 0; offset < maxDimension; offset += 15) {
+              svgContent += `<line x1="${x - segHeight + offset}" y1="${y}" x2="${x + offset}" y2="${y + segHeight}" stroke="#7b1fa2" stroke-width="1" stroke-dasharray="6,3,2,3"/>`
+            }
+            svgContent += '</g>'
+            svgContent += `<text x="${centerX}" y="${y + 15}" text-anchor="middle" font-size="10" fill="#7b1fa2" pointer-events="none">${label}</text>`
+            break
+
+          case 'Стеклопакет':
+            const colsCount = Math.max(2, Math.floor(segWidth / 35))
+            const rowsCount = Math.max(2, Math.floor(segHeight / 35))
+            const contentHeight = Math.max(segHeight - 30, 20)
+            for (let r = 0; r < rowsCount; r++) {
+              for (let c = 0; c < colsCount; c++) {
+                const cx = x + (segWidth / (colsCount + 1)) * (c + 1)
+                const cy = y + 20 + (contentHeight / rowsCount) * (r + 0.5)
+                svgContent += `<line x1="${cx - 4}" y1="${cy - 4}" x2="${cx - 4}" y2="${cy + 4}" stroke="#1565c0" stroke-width="1.5"/>`
+                svgContent += `<line x1="${cx}" y1="${cy - 4}" x2="${cx}" y2="${cy + 4}" stroke="#1565c0" stroke-width="1.5"/>`
+                svgContent += `<line x1="${cx + 4}" y1="${cy - 4}" x2="${cx + 4}" y2="${cy + 4}" stroke="#1565c0" stroke-width="1.5"/>`
+              }
+            }
+            svgContent += `<text x="${centerX}" y="${y + 15}" text-anchor="middle" font-size="10" fill="#1565c0" pointer-events="none">${label}</text>`
+            break
+
+          default:
+            // Пустой - только текст
+            svgContent += `<text x="${centerX}" y="${centerY}" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="${strokeColor}" pointer-events="none">${label}</text>`
+        }
       }
     }
 
@@ -369,6 +476,7 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
   }
 
   // Вычисление позиций и размеров всех сегментов
+  // Каждый сегмент имеет независимый размер
   const calculateSegmentLayouts = () => {
     const layouts: Record<string, { x: number; y: number; width: number; height: number; hidden?: boolean }> = {}
 
@@ -377,7 +485,11 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
       return { layouts, totalWidth: DEFAULT_SEGMENT_SIZE, totalHeight: DEFAULT_SEGMENT_SIZE }
     }
 
-    // Определяем границы объединённых групп (какие строки и столбцы они занимают)
+    const gap = 4 // Отступ между сегментами
+    const startX = 2
+    const startY = 2
+
+    // Определяем границы объединённых групп
     const mergedGroupBounds: Record<string, { minRow: number; maxRow: number; minCol: number; maxCol: number }> = {}
     for (const [mainId, hiddenIds] of Object.entries(mergedSegments)) {
       const allIds = [mainId, ...hiddenIds]
@@ -395,105 +507,91 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
       mergedGroupBounds[mainId] = { minRow, maxRow, minCol, maxCol }
     }
 
-    // Вычисляем эффективные размеры для каждого столбца и строки
-    // Для столбцов: берём максимальную ширину сегментов в этом столбце
-    // Для строк: берём максимальную высоту сегментов в этой строке
-    const colWidths: number[] = Array(config.horizontalSegments).fill(0)
-    const rowHeights: number[] = Array(config.verticalSegments).fill(0)
-
+    // Получаем индивидуальные размеры каждого сегмента
+    const segmentSizes: Record<string, { width: number; height: number }> = {}
     for (let row = 0; row < config.verticalSegments; row++) {
       for (let col = 0; col < config.horizontalSegments; col++) {
         const segmentId = `${row}-${col}`
-
-        // Проверяем, является ли сегмент частью объединённой группы
-        const mainSegment = findMainSegmentForHidden(segmentId)
-        const isMainMerged = mergedSegments[segmentId] !== undefined
-
-        if (mainSegment) {
-          // Скрытый сегмент - пропускаем, его место занимает главный сегмент
-          continue
-        } else if (isMainMerged) {
-          // Главный объединённый сегмент
-          const bounds = mergedGroupBounds[segmentId]
-          const mainSize = getSegmentSize(segmentId)
-
-          // Распределяем размер объединённого сегмента по занимаемым столбцам/строкам
-          const numCols = bounds.maxCol - bounds.minCol + 1
-          const numRows = bounds.maxRow - bounds.minRow + 1
-          const widthPerCol = Math.max(mainSize.width, 50) / numCols
-          const heightPerRow = Math.max(mainSize.height, 50) / numRows
-
-          for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
-            colWidths[c] = Math.max(colWidths[c], widthPerCol)
-          }
-          for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
-            rowHeights[r] = Math.max(rowHeights[r], heightPerRow)
-          }
-        } else {
-          // Обычный сегмент
-          const size = getSegmentSize(segmentId)
-          colWidths[col] = Math.max(colWidths[col], Math.max(size.width, 50))
-          rowHeights[row] = Math.max(rowHeights[row], Math.max(size.height, 50))
+        const size = getSegmentSize(segmentId)
+        segmentSizes[segmentId] = {
+          width: Math.max(size.width, 50),
+          height: Math.max(size.height, 50)
         }
       }
     }
 
-    // Устанавливаем минимальные размеры
-    for (let col = 0; col < config.horizontalSegments; col++) {
-      if (colWidths[col] === 0) colWidths[col] = 50
-    }
+    // Вычисляем максимальную ширину для каждой строки (сумма ширин сегментов в строке)
+    // и максимальную высоту для каждого столбца (сумма высот сегментов в столбце)
+    let maxRowWidth = 0
     for (let row = 0; row < config.verticalSegments; row++) {
-      if (rowHeights[row] === 0) rowHeights[row] = 50
+      let rowWidth = 0
+      for (let col = 0; col < config.horizontalSegments; col++) {
+        const segmentId = `${row}-${col}`
+        if (!isSegmentHidden(segmentId)) {
+          rowWidth += segmentSizes[segmentId].width + gap
+        }
+      }
+      maxRowWidth = Math.max(maxRowWidth, rowWidth)
     }
 
-    // Вычисляем позиции на основе накопленных размеров
-    const colPositions: number[] = [2]
-    for (let col = 1; col <= config.horizontalSegments; col++) {
-      colPositions[col] = colPositions[col - 1] + colWidths[col - 1]
-    }
-
-    const rowPositions: number[] = [2]
-    for (let row = 1; row <= config.verticalSegments; row++) {
-      rowPositions[row] = rowPositions[row - 1] + rowHeights[row - 1]
-    }
-
-    // Создаём layouts для всех сегментов
+    // Вычисляем позиции для каждого сегмента независимо
+    // Каждая строка начинается с startX, сегменты размещаются последовательно
+    let currentY = startY
     for (let row = 0; row < config.verticalSegments; row++) {
+      let currentX = startX
+      let maxHeightInRow = 0
+
       for (let col = 0; col < config.horizontalSegments; col++) {
         const segmentId = `${row}-${col}`
         const hidden = isSegmentHidden(segmentId)
+        const isMainMerged = mergedSegments[segmentId] !== undefined
+
+        if (hidden) {
+          // Скрытый сегмент - записываем позицию, но не отображаем
+          layouts[segmentId] = {
+            x: currentX,
+            y: currentY,
+            width: 0,
+            height: 0,
+            hidden: true
+          }
+          continue
+        }
+
+        let segWidth = segmentSizes[segmentId].width
+        let segHeight = segmentSizes[segmentId].height
+
+        // Для объединённых сегментов используем размер главного сегмента
+        if (isMainMerged) {
+          const mainSize = getSegmentSize(segmentId)
+          segWidth = Math.max(mainSize.width, 50)
+          segHeight = Math.max(mainSize.height, 50)
+        }
 
         layouts[segmentId] = {
-          x: colPositions[col],
-          y: rowPositions[row],
-          width: colWidths[col] - 4,
-          height: rowHeights[row] - 4,
-          hidden
+          x: currentX,
+          y: currentY,
+          width: segWidth,
+          height: segHeight,
+          hidden: false
         }
+
+        currentX += segWidth + gap
+        maxHeightInRow = Math.max(maxHeightInRow, segHeight)
       }
+
+      currentY += maxHeightInRow + gap
     }
 
-    // Обновляем размеры объединённых сегментов
-    for (const [mainId, hiddenIds] of Object.entries(mergedSegments)) {
-      const bounds = mergedGroupBounds[mainId]
-      const mainSize = getSegmentSize(mainId)
-
-      // Позиция - левый верхний угол группы
-      const x = colPositions[bounds.minCol]
-      const y = rowPositions[bounds.minRow]
-
-      // Размер - из свойств главного сегмента
-      layouts[mainId] = {
-        ...layouts[mainId],
-        x,
-        y,
-        width: Math.max(mainSize.width, 50) - 4,
-        height: Math.max(mainSize.height, 50) - 4
+    // Вычисляем общие размеры витража
+    let totalWidth = startX
+    let totalHeight = startY
+    for (const layout of Object.values(layouts)) {
+      if (!layout.hidden) {
+        totalWidth = Math.max(totalWidth, layout.x + layout.width + gap)
+        totalHeight = Math.max(totalHeight, layout.y + layout.height + gap)
       }
     }
-
-    const totalWidth = colPositions[config.horizontalSegments]
-    const totalHeight = rowPositions[config.verticalSegments]
 
     return { layouts, totalWidth: totalWidth || DEFAULT_SEGMENT_SIZE, totalHeight: totalHeight || DEFAULT_SEGMENT_SIZE }
   }
@@ -871,9 +969,9 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
             </button>
           </div>
           {selectedObject && (
-            <div className="vitrage-constructor-object">
-              <span className="object-label">Объект:</span>
-              <span className="object-name">{selectedObject.name}</span>
+            <div className="object-info-badge">
+              <span className="object-info-label">Объект:</span>
+              <span className="object-info-name">{selectedObject.name}</span>
             </div>
           )}
         </header>
@@ -978,8 +1076,10 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
                 <div className="property-field">
                   <label>Тип заполнения</label>
                   <select
+                    ref={propFillTypeRef}
                     value={getSegmentProperties(selectedSegment).fillType}
                     onChange={(e) => handlePropertyChange('fillType', e.target.value)}
+                    onKeyDown={(e) => handlePropertyKeyDown(e, 0)}
                   >
                     {FILL_TYPES.map(type => (
                       <option key={type} value={type}>{type}</option>
@@ -990,9 +1090,11 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
                 <div className="property-field">
                   <label>Обозначение сегмента</label>
                   <input
+                    ref={propLabelRef}
                     type="text"
                     value={getSegmentProperties(selectedSegment).label}
                     onChange={(e) => handlePropertyChange('label', e.target.value)}
+                    onKeyDown={(e) => handlePropertyKeyDown(e, 1)}
                     placeholder="Например: С1"
                   />
                 </div>
@@ -1000,9 +1102,11 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
                 <div className="property-field">
                   <label>Формула стеклопакета</label>
                   <input
+                    ref={propFormulaRef}
                     type="text"
                     value={getSegmentProperties(selectedSegment).formula}
                     onChange={(e) => handlePropertyChange('formula', e.target.value)}
+                    onKeyDown={(e) => handlePropertyKeyDown(e, 2)}
                     placeholder="Например: 4М1-16-4М1"
                   />
                 </div>
@@ -1010,9 +1114,11 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
                 <div className="property-field">
                   <label>Ширина (мм)</label>
                   <input
+                    ref={propWidthRef}
                     type="text"
                     value={getSegmentProperties(selectedSegment).width}
                     onChange={(e) => handlePropertyChange('width', e.target.value)}
+                    onKeyDown={(e) => handlePropertyKeyDown(e, 3)}
                     placeholder="1200"
                   />
                 </div>
@@ -1020,14 +1126,22 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
                 <div className="property-field">
                   <label>Высота (мм)</label>
                   <input
+                    ref={propHeightRef}
                     type="text"
                     value={getSegmentProperties(selectedSegment).height}
                     onChange={(e) => handlePropertyChange('height', e.target.value)}
+                    onKeyDown={(e) => handlePropertyKeyDown(e, 4)}
                     placeholder="1500"
                   />
                 </div>
 
-                <button className="properties-save-btn" type="button" onClick={closePropertiesPanel}>
+                <button
+                  ref={propSaveBtnRef}
+                  className="properties-save-btn"
+                  type="button"
+                  onClick={closePropertiesPanel}
+                  onKeyDown={(e) => { if (e.key === 'Enter') closePropertiesPanel() }}
+                >
                   Сохранить
                 </button>
               </div>
@@ -1045,9 +1159,9 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
       <header className="vitrage-constructor-header">
         <h1 className="vitrage-constructor-title">Конструктор Витражей</h1>
         {selectedObject && (
-          <div className="vitrage-constructor-object">
-            <span className="object-label">Объект:</span>
-            <span className="object-name">{selectedObject.name}</span>
+          <div className="object-info-badge">
+            <span className="object-info-label">Объект:</span>
+            <span className="object-info-name">{selectedObject.name}</span>
           </div>
         )}
       </header>

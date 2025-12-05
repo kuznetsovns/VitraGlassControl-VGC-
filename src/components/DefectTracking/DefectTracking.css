@@ -470,8 +470,15 @@
 
 .header-left {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+}
+
+.vitrage-info {
+  display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 2px;
 }
 
 .vitrage-title {
@@ -506,18 +513,30 @@
   gap: 8px;
 }
 
-.back-btn {
-  background: #6c757d;
+.defect-back-btn {
+  background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
   color: #ffffff;
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.back-btn:hover {
-  background: #5a6268;
-  transform: translateY(-1px);
+.defect-back-btn:hover {
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(229, 57, 53, 0.5);
 }
 
-.back-btn:active {
+.defect-back-btn:active {
   transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(229, 57, 53, 0.4);
 }
 
 .save-defects-btn {
