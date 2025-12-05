@@ -72,6 +72,12 @@ export interface FloorPlan {
   scale: number // mm per pixel
   backgroundImage?: string // Base64 image data
   backgroundOpacity?: number
+  backgroundLayout?: { // Fixed background position and size
+    x: number
+    y: number
+    width: number
+    height: number
+  }
   createdAt: Date
   updatedAt: Date
   // Legacy field for backward compatibility
@@ -110,6 +116,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [planToDuplicate, setPlanToDuplicate] = useState<FloorPlan | null>(null)
+  const [vitrageSearchQuery, setVitrageSearchQuery] = useState('')
 
   // Vitrage ID state
   const [vitrageIDData, setVitrageIDData] = useState<VitrageID>({
@@ -323,6 +330,14 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       img.src = currentPlan.backgroundImage
     }
   }, [currentPlan?.backgroundImage, backgroundImageCache])
+
+  // Reset zoom and pan when plan changes to keep vitrages anchored to background
+  useEffect(() => {
+    if (currentPlan) {
+      setZoomLevel(1)
+      setPanOffset({x: 0, y: 0})
+    }
+  }, [currentPlan?.id])
 
   // Save plans to storage (removed as we'll save individually)
   const savePlansToStorage = useCallback((plans: FloorPlan[]) => {
@@ -912,34 +927,43 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
         const img = backgroundImageCache[currentPlan.backgroundImage]
         ctx.save()
         ctx.globalAlpha = currentPlan?.backgroundOpacity || backgroundOpacity
-        
-        // Calculate world space dimensions
-        const worldWidth = canvasDimensions.width / zoomLevel
-        const worldHeight = canvasDimensions.height / zoomLevel
-        const worldX = -panOffset.x / zoomLevel
-        const worldY = -panOffset.y / zoomLevel
-        
-        // Calculate scaling to fit image properly
-        const imgAspectRatio = img.width / img.height
-        const worldAspectRatio = worldWidth / worldHeight
-        
-        let drawWidth, drawHeight, offsetX, offsetY
-        
-        if (imgAspectRatio > worldAspectRatio) {
-          // Image is wider - fit width
-          drawWidth = worldWidth
-          drawHeight = worldWidth / imgAspectRatio
-          offsetX = worldX
-          offsetY = worldY + (worldHeight - drawHeight) / 2
-        } else {
-          // Image is taller - fit height  
-          drawHeight = worldHeight
-          drawWidth = worldHeight * imgAspectRatio
-          offsetX = worldX + (worldWidth - drawWidth) / 2
-          offsetY = worldY
+
+        let layout = currentPlan.backgroundLayout
+
+        // If no saved layout, calculate it and save
+        if (!layout) {
+          const worldWidth = canvasDimensions.width
+          const worldHeight = canvasDimensions.height
+          const imgAspectRatio = img.width / img.height
+          const worldAspectRatio = worldWidth / worldHeight
+
+          let drawWidth, drawHeight, offsetX, offsetY
+
+          if (imgAspectRatio > worldAspectRatio) {
+            // Image is wider - fit width
+            drawWidth = worldWidth
+            drawHeight = worldWidth / imgAspectRatio
+            offsetX = 0
+            offsetY = (worldHeight - drawHeight) / 2
+          } else {
+            // Image is taller - fit height
+            drawHeight = worldHeight
+            drawWidth = worldHeight * imgAspectRatio
+            offsetX = (worldWidth - drawWidth) / 2
+            offsetY = 0
+          }
+
+          layout = { x: offsetX, y: offsetY, width: drawWidth, height: drawHeight }
+
+          // Save layout to plan
+          updateCurrentPlan(plan => ({
+            ...plan,
+            backgroundLayout: layout!
+          }))
         }
-        
-        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
+
+        // Always draw at fixed position
+        ctx.drawImage(img, layout.x, layout.y, layout.width, layout.height)
         ctx.restore()
       }
 
@@ -1128,7 +1152,34 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [selectedItem, currentPlan, updateCurrentPlan])
-  
+
+  // Handle ESC key to close modals
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close vitrage ID dialog first (highest priority)
+        if (showVitrageIDDialog) {
+          setShowVitrageIDDialog(false)
+        }
+        // Then close vitrage selector
+        else if (showVitrageSelector) {
+          setShowVitrageSelector(false)
+          setVitrageSearchQuery('') // Clear search when closing
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleEscKey)
+    return () => document.removeEventListener('keydown', handleEscKey)
+  }, [showVitrageSelector, showVitrageIDDialog])
+
+  // Clear search query when opening vitrage selector
+  useEffect(() => {
+    if (showVitrageSelector) {
+      setVitrageSearchQuery('')
+    }
+  }, [showVitrageSelector])
+
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1205,17 +1256,21 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
     if (!placedVitrage) return
 
+    const vitrage = savedVitrages.find(v => v.id === placedVitrage.vitrageId)
+
     // Load existing segment IDs or create new mapping
     setSegmentIDsTemp(placedVitrage.segmentIDs || {})
     setSelectedSegmentForID(null)
+
+    // Pre-fill with current plan data
     setVitrageIDData({
-      object: '',
-      corpus: '',
-      section: '',
-      floor: '',
+      object: selectedObject?.name || '',
+      corpus: currentPlan.corpus || '',
+      section: currentPlan.section || '',
+      floor: currentPlan.floor?.toString() || '',
       apartment: '',
       vitrageNumber: '',
-      vitrageName: '',
+      vitrageName: vitrage?.name || '',
       vitrageSection: ''
     })
 
@@ -1226,18 +1281,25 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   const selectSegmentForID = (segmentId: string) => {
     setSelectedSegmentForID(segmentId)
 
-    // Load existing ID for this segment or empty ID
+    if (!currentPlan || !selectedItem) return
+
+    const placedVitrage = currentPlan.placedVitrages.find(v => v.id === selectedItem)
+    if (!placedVitrage) return
+
+    const vitrage = savedVitrages.find(v => v.id === placedVitrage.vitrageId)
+
+    // Load existing ID for this segment or pre-fill with plan data
     if (segmentIDsTemp[segmentId]) {
       setVitrageIDData(segmentIDsTemp[segmentId])
     } else {
       setVitrageIDData({
-        object: '',
-        corpus: '',
-        section: '',
-        floor: '',
+        object: selectedObject?.name || '',
+        corpus: currentPlan.corpus || '',
+        section: currentPlan.section || '',
+        floor: currentPlan.floor?.toString() || '',
         apartment: '',
         vitrageNumber: '',
-        vitrageName: '',
+        vitrageName: vitrage?.name || '',
         vitrageSection: ''
       })
     }
@@ -1911,8 +1973,41 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                 <p style={{marginBottom: '16px'}}>
                   Выберите витраж из списка для размещения на плане этажа
                 </p>
+
+                {/* Search input */}
+                <div style={{marginBottom: '20px'}}>
+                  <input
+                    type="text"
+                    placeholder="🔍 Поиск по названию витража..."
+                    value={vitrageSearchQuery}
+                    onChange={(e) => setVitrageSearchQuery(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      fontSize: '14px',
+                      border: '2px solid #e0e0e0',
+                      borderRadius: '8px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#4a90e2'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                  />
+                  {vitrageSearchQuery && (
+                    <div style={{marginTop: '8px', fontSize: '13px', color: '#666'}}>
+                      Найдено: {savedVitrages.filter(v =>
+                        v.name.toLowerCase().includes(vitrageSearchQuery.toLowerCase())
+                      ).length} витражей
+                    </div>
+                  )}
+                </div>
+
                 <div className="vitrage-grid">
-                  {savedVitrages.map(vitrage => (
+                  {savedVitrages
+                    .filter(vitrage =>
+                      vitrage.name.toLowerCase().includes(vitrageSearchQuery.toLowerCase())
+                    )
+                    .map(vitrage => (
                     <div
                       key={vitrage.id}
                       className="vitrage-card"
@@ -1945,7 +2040,10 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
               </div>
             )}
             <div className="modal-actions">
-              <button className="secondary" onClick={() => setShowVitrageSelector(false)}>
+              <button className="secondary" onClick={() => {
+                setShowVitrageSelector(false)
+                setVitrageSearchQuery('')
+              }}>
                 Отмена
               </button>
             </div>
@@ -1963,6 +2061,28 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
           <div className="modal-overlay">
             <div className="modal large" style={{maxWidth: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflowY: 'auto'}}>
               <h3 style={{color: '#000'}}>Настройка ID секций витража: {vitrage.name}</h3>
+
+              <div style={{
+                marginBottom: '20px',
+                padding: '16px',
+                background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                boxShadow: '0 4px 12px rgba(255, 107, 107, 0.3)'
+              }}>
+                <p style={{
+                  color: '#ffffff',
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  margin: 0,
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                }}>
+                  ВИД СНАРУЖИ (по КМ, КМД)
+                </p>
+              </div>
+
               <p style={{marginBottom: '16px', color: '#000', fontSize: '14px'}}>
                 Кликните на секцию для задания ID. Всего секций: {vitrage.rows} × {vitrage.cols} = {vitrage.rows * vitrage.cols}
               </p>
@@ -1993,6 +2113,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                           const hasID = !!segmentIDsTemp[segmentId]
                           const isSelected = selectedSegmentForID === segmentId
 
+                          // Sequential numbering: left to right, top to bottom
+                          const segmentNumber = rowIndex * vitrage.cols + colIndex + 1
+
                           return (
                             <div
                               key={colIndex}
@@ -2017,8 +2140,8 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                                 e.currentTarget.style.background = isSelected ? 'rgba(76, 175, 80, 0.3)' : hasID ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.1)'
                               }}
                             >
-                              <div style={{fontSize: '11px', color: '#000', fontWeight: 'bold'}}>
-                                {rowIndex + 1}-{colIndex + 1}
+                              <div style={{fontSize: '14px', color: '#000', fontWeight: 'bold'}}>
+                                {segmentNumber}
                               </div>
                               {hasID && (
                                 <div style={{fontSize: '9px', color: '#000', marginTop: '4px', textAlign: 'center', wordBreak: 'break-all'}}>
@@ -2038,7 +2161,12 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                   {selectedSegmentForID ? (
                     <>
                       <h4 style={{marginBottom: '12px', fontSize: '14px', color: '#000'}}>
-                        ID для секции {selectedSegmentForID.split('-')[1]}-{selectedSegmentForID.split('-')[2]}
+                        ID для секции {(() => {
+                          const parts = selectedSegmentForID.split('-')
+                          const row = parseInt(parts[1])
+                          const col = parseInt(parts[2])
+                          return row * vitrage.cols + col + 1
+                        })()}
                       </h4>
 
                       <div style={{flex: 1, overflowY: 'auto', paddingRight: '8px'}}>
