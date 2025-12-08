@@ -35,46 +35,46 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
     // Загрузка витражей через сервис
     const loadVitrages = async () => {
       try {
-        // Если выбран объект, загружаем размещенные витражи из placed_vitrages
+        // Для страницы дефектовки загружаем ТОЛЬКО витражи с дефектами из placed_vitrages
         if (selectedObject?.id) {
           const placedResult = await placedVitrageStorage.getForDefectTracking(selectedObject.id)
-          if (placedResult.data && placedResult.data.length > 0) {
-            console.log(`📍 Загружено ${placedResult.data.length} размещенных витражей из ${placedResult.usingFallback ? 'localStorage' : 'Supabase'}`)
-            setPlacedVitrages(placedResult.data)
 
-            // Преобразуем размещенные витражи в формат VitrageItem для отображения
-            const vitrageItems: VitrageItem[] = placedResult.data.map(pv => ({
-              id: pv.id || pv.vitrage_id,
-              name: pv.vitrage_name,
-              marking: pv.full_id || pv.vitrage_name,
-              objectId: pv.object_id,
-              vitrageName: pv.vitrage_name,
-              vitrageData: pv.vitrage_data,
-              rows: pv.vitrage_data?.rows || 1,
-              cols: pv.vitrage_data?.cols || 1,
-              totalWidth: pv.vitrage_data?.totalWidth || 1000,
-              totalHeight: pv.vitrage_data?.totalHeight || 1000,
-              segments: pv.vitrage_data?.segments || [],
-              segmentDefects: pv.segment_defects,
-              inspectionStatus: pv.inspection_status,
-              defectiveSegmentsCount: pv.defective_segments_count,
-              totalDefectsCount: pv.total_defects_count,
-              createdAt: pv.created_at || new Date().toISOString()
-            }))
+          console.log(`🎯 Загружено ${placedResult.data.length} витражей с дефектами из ${placedResult.usingFallback ? 'localStorage' : 'Supabase'}`)
+          setPlacedVitrages(placedResult.data)
 
-            setVitrages(vitrageItems)
-            setStorageSource(placedResult.usingFallback ? 'localStorage' : 'supabase')
-            return
-          }
+          // Преобразуем размещенные витражи в формат VitrageItem для отображения
+          const vitrageItems: VitrageItem[] = placedResult.data.map(pv => ({
+            id: pv.id || pv.vitrage_id,
+            name: pv.vitrage_name,
+            marking: pv.full_id || pv.vitrage_name,
+            objectId: pv.object_id,
+            vitrageName: pv.vitrage_name,
+            vitrageData: pv.vitrage_data,
+            rows: pv.vitrage_data?.rows || 1,
+            cols: pv.vitrage_data?.cols || 1,
+            totalWidth: pv.vitrage_data?.totalWidth || 1000,
+            totalHeight: pv.vitrage_data?.totalHeight || 1000,
+            segments: pv.vitrage_data?.segments || [],
+            segmentDefects: pv.segment_defects,
+            inspectionStatus: pv.inspection_status,
+            defectiveSegmentsCount: pv.defective_segments_count,
+            totalDefectsCount: pv.total_defects_count,
+            createdAt: pv.created_at || new Date().toISOString()
+          }))
+
+          setVitrages(vitrageItems)
+          setStorageSource(placedResult.usingFallback ? 'localStorage' : 'supabase')
+        } else {
+          // Если объект не выбран, показываем пустой список
+          console.log('⚠️ Объект не выбран, витражи не загружаются')
+          setVitrages([])
+          setPlacedVitrages([])
+          setStorageSource('localStorage')
         }
-
-        // Иначе загружаем все витражи из спецификации
-        const { data, source } = await vitrageStorage.getAll()
-        setVitrages(data as VitrageItem[])
-        setStorageSource(source)
-        console.log(`📋 Витражи загружены из ${source}:`, data.length)
       } catch (error) {
         console.error('Ошибка при загрузке витражей:', error)
+        setVitrages([])
+        setPlacedVitrages([])
       }
     }
 
@@ -105,14 +105,10 @@ export function useDefectData(selectedObject?: { id: string; name: string } | nu
 
   // Фильтрация витражей по выбранному объекту
   useEffect(() => {
-    let filtered = vitrages
-
-    if (selectedObject) {
-      filtered = filtered.filter(v => v.objectId === selectedObject.id)
-    }
-
-    setFilteredVitrages(filtered)
-  }, [selectedObject, vitrages])
+    // На странице дефектовки показываем только витражи, которые уже были отфильтрованы по дефектам
+    // Дополнительная фильтрация по объекту не нужна, так как витражи уже загружены для конкретного объекта
+    setFilteredVitrages(vitrages)
+  }, [vitrages])
 
   // Функция для добавления нового типа дефекта
   const addNewDefect = async (newDefectName: string) => {
