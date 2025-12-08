@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { VitrageItem } from '../../types'
 import { useCanvasControls } from '../../hooks/useCanvasControls'
 import { useSegmentSelection } from '../../hooks/useSegmentSelection'
@@ -52,6 +53,24 @@ export function DefectWorkspace({
   const hasDefects = Array.from(segmentDefectsData.entries()).some(
     ([key, data]) => key.startsWith(vitrage.id) && data.defects.length > 0
   )
+
+  // Обработка клавиши Escape для выхода из дефектовки
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Если открыта панель дефектов, закрываем её
+        if (segmentSelection.showDefectPanel) {
+          segmentSelection.handleCloseDefectPanel()
+        } else {
+          // Если панель закрыта, выходим из дефектовки
+          onBack()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [segmentSelection.showDefectPanel, segmentSelection.handleCloseDefectPanel, onBack])
 
   return (
     <div className="defect-tracking-fullscreen">

@@ -42,6 +42,21 @@ export function DefectPanel({
   const [siteManager, setSiteManager] = useState('')
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
 
+  // Get display ID for the segment
+  const getDisplayId = () => {
+    const match = selectedSegmentId.match(/segment-(\d+)-(\d+)/)
+    if (match) {
+      const row = parseInt(match[1])
+      const col = parseInt(match[2])
+      const index = row * selectedVitrage.cols + col
+      const segment = selectedVitrage.segments[index]
+      if (segment && segment.id) {
+        return segment.id
+      }
+    }
+    return selectedSegmentId
+  }
+
   // Загрузка данных сегмента при монтировании или изменении
   useEffect(() => {
     const data = loadSegmentData(selectedVitrage.id, selectedSegmentId)
@@ -96,7 +111,7 @@ export function DefectPanel({
   return (
     <div className="defect-panel">
       <div className="defect-panel-header">
-        <h3>Дефекты сегмента #{selectedSegmentId}</h3>
+        <h3>Дефекты сегмента #{getDisplayId()}</h3>
         <button className="close-panel-btn" onClick={onClose}>×</button>
       </div>
 
