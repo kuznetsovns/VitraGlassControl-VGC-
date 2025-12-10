@@ -15,7 +15,6 @@ export type Department = 'УОК' | 'Снабжение' | 'Гарантия' | 
 // Меню для отдела УОК
 const uokMenuItems: MenuItem[] = [
   { id: 'vitrage-constructor', label: 'Конструктор Витражей', icon: '🔧' },
-  { id: 'vitrage-visualizer', label: 'Создание витража', icon: '🎨' },
   { id: 'specification-new', label: 'Типовые витражи', icon: '📋' },
   { id: 'defect-tracking', label: 'Дефектовка', icon: '🔍' },
   { id: 'floor-plans', label: 'План этажей', icon: '🏢' },
