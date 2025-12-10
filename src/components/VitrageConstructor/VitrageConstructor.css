@@ -287,6 +287,26 @@
   transform: none;
 }
 
+.header-action-btn.add-btn {
+  background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%);
+  box-shadow: 0 2px 6px rgba(124, 77, 255, 0.3);
+}
+
+.header-action-btn.add-btn:hover {
+  background: linear-gradient(135deg, #651fff 0%, #6200ea 100%);
+  box-shadow: 0 4px 10px rgba(124, 77, 255, 0.4);
+}
+
+.header-action-btn.remove-btn {
+  background: linear-gradient(135deg, #ff7043 0%, #f4511e 100%);
+  box-shadow: 0 2px 6px rgba(255, 112, 67, 0.3);
+}
+
+.header-action-btn.remove-btn:hover {
+  background: linear-gradient(135deg, #f4511e 0%, #e64a19 100%);
+  box-shadow: 0 4px 10px rgba(255, 112, 67, 0.4);
+}
+
 /* Editor Workspace */
 .vitrage-editor-workspace {
   flex: 1;

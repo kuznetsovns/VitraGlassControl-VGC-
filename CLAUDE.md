@@ -23,9 +23,9 @@ npm run preview  # Preview production build
 
 ### Routing (React Router)
 ```
-/                                           → MainPage (object selection)
+/                                           → Layout → MainPage (object selection)
 /object/:id                                 → ObjectPage (department selection)
-/object/:id/department/:department/:section → Layout + MainContent (workspace)
+/object/:id/department/:department/:section → Layout → MainContent (workspace)
 ```
 
 **URL Parameters:**
@@ -37,19 +37,28 @@ npm run preview  # Preview production build
 | Section | УОК | Снабжение | Гарантия |
 |---------|-----|-----------|----------|
 | vitrage-visualizer | ✓ | | |
+| vitrage-constructor | ✓ | | |
 | specification-new | ✓ | | |
 | defect-tracking | ✓ | | |
 | floor-plans | ✓ | | |
 | facade-plans | ✓ | | |
 | order-form | | ✓ | ✓ |
 
+Additional sections exist (`support`, `settings`, `admin`) but are currently placeholder UI.
+
 ### Core Files
 - `src/App.tsx` - Route definitions
 - `src/components/Layout.tsx` - Workspace shell with sidebar
 - `src/components/MainContent.tsx` - Section content router
-- `src/services/objectStorage.ts` - Storage service (Supabase + localStorage fallback)
 - `src/lib/supabase.ts` - Supabase client
 - `src/types/database.ts` - Database TypeScript types
+
+### Storage Services (`src/services/`)
+- `objectStorage.ts` - Construction objects CRUD
+- `vitrageStorage.ts` - Vitrage configurations + segments
+- `defectStorage.ts` - Defect tracking data
+- `floorPlanStorage.ts` - Floor plan data with placed vitrages
+- `placedVitrageStorage.ts` - Placed vitrages with defect inspection data
 
 ### Legacy vs Current Components
 | Legacy (deprecated) | Current |
@@ -57,14 +66,50 @@ npm run preview  # Preview production build
 | `GraphicsEditor/` | `VitrageVisualizer/` |
 | `VitrageSpecification/` | `VitrageSpecificationNew/` |
 
+**Note**: `GraphicsEditor` is still used for the `vitrage-drawing` section (legacy route).
+
+### Fill Types (used across components)
+```typescript
+const FILL_TYPES = [
+  'Стеклопакет',
+  'Глухое остекление',
+  'Открывающееся окно',
+  'Дверь',
+  'Вентиляция',
+  'Пустой'
+]
+```
+
+### Component Module Structure
+Major components follow a modular pattern with subdirectories:
+```
+ComponentName/
+├── ComponentName.tsx     # Main component
+├── index.ts              # Public exports
+├── hooks/                # Custom React hooks
+├── types/                # TypeScript interfaces
+├── utils/                # Helper functions
+└── components/           # Sub-components (optional)
+```
+
+Components using this structure: `VitrageVisualizer`, `FloorPlanEditor`, `FacadePlanEditor`, `GraphicsEditor`, `DefectTracking`, `MainPage`
+
+**Note**: `VitrageConstructor` and `VitrageSpecificationNew` use a simpler flat structure (main component + CSS + index.ts).
+
 ## Storage Architecture
 
 ### Hybrid Storage with Automatic Fallback
-- **Supabase**: Construction objects (shared, `objects` table)
-- **localStorage fallback**: Objects when Supabase unavailable
-- **localStorage only**: Vitrages (`saved-vitrages`), Floor plans (`floorPlans`), Facade plans (`facadePlans`)
+All storage services use Supabase with automatic localStorage fallback when unavailable:
 
-All object CRUD goes through `objectStorage` service - never call Supabase directly for objects.
+| Data Type | Storage Service | Supabase Table | localStorage Key |
+|-----------|-----------------|----------------|------------------|
+| Objects | `objectStorage` | `objects` | `localStorage-objects` |
+| Vitrages | `vitrageStorage` | `vitrages` | `saved-vitrages` |
+| Defects | `defectStorage` | `segment_defects` | `segment-defects-data` |
+| Floor Plans | `floorPlanStorage` | `floor_plans` | `floor-plans` |
+| Placed Vitrages | `placedVitrageStorage` | `placed_vitrages` | `placed-vitrages` |
+
+Always use the appropriate storage service for CRUD operations - never call Supabase directly.
 
 ### Environment Variables (`.env`, gitignored)
 ```
@@ -104,6 +149,16 @@ interface PlacedVitrage {
   scale: number               // 0.1 to 3.0
 }
 ```
+
+## Component View Modes
+
+### VitrageConstructor
+Uses a two-phase workflow:
+- `'config'` - Initial configuration form (marking, segments count)
+- `'editor'` - Grid editor with segment selection and properties
+
+### VitrageVisualizer
+Similar two-phase approach with configuration preview and detailed editing.
 
 ## Canvas Editor Interactions
 
@@ -153,8 +208,8 @@ interface PlacedVitrage {
 
 ### Patterns
 - Modal dialogs: Use overlay pattern from MainPage/ObjectPage
-- Object CRUD: Always use `objectStorage` service
-- Storage fallback: Console shows "📦 Using localStorage fallback" when active
+- Storage: Use appropriate storage service (`objectStorage`, `vitrageStorage`, `defectStorage`, `floorPlanStorage`, `placedVitrageStorage`)
+- Storage fallback: Console shows "📦 Using localStorage fallback" when Supabase unavailable
 
 ## Repository Note
 

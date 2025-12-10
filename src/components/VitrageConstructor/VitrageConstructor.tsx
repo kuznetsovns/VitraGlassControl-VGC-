@@ -613,6 +613,82 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
     setSelectedSegments(new Set())
   }
 
+  // Функция добавления строки
+  const handleAddRow = () => {
+    setConfig(prev => ({
+      ...prev,
+      verticalSegments: prev.verticalSegments + 1
+    }))
+  }
+
+  // Функция удаления строки
+  const handleRemoveRow = () => {
+    if (config.verticalSegments <= 1) return
+
+    const lastRowIndex = config.verticalSegments - 1
+
+    // Удаляем свойства сегментов последней строки
+    setSegmentProperties(prev => {
+      const newProps = { ...prev }
+      for (let col = 0; col < config.horizontalSegments; col++) {
+        delete newProps[`${lastRowIndex}-${col}`]
+      }
+      return newProps
+    })
+
+    // Удаляем выделение сегментов последней строки
+    setSelectedSegments(prev => {
+      const newSet = new Set(prev)
+      for (let col = 0; col < config.horizontalSegments; col++) {
+        newSet.delete(`${lastRowIndex}-${col}`)
+      }
+      return newSet
+    })
+
+    setConfig(prev => ({
+      ...prev,
+      verticalSegments: prev.verticalSegments - 1
+    }))
+  }
+
+  // Функция добавления столбца
+  const handleAddColumn = () => {
+    setConfig(prev => ({
+      ...prev,
+      horizontalSegments: prev.horizontalSegments + 1
+    }))
+  }
+
+  // Функция удаления столбца
+  const handleRemoveColumn = () => {
+    if (config.horizontalSegments <= 1) return
+
+    const lastColIndex = config.horizontalSegments - 1
+
+    // Удаляем свойства сегментов последнего столбца
+    setSegmentProperties(prev => {
+      const newProps = { ...prev }
+      for (let row = 0; row < config.verticalSegments; row++) {
+        delete newProps[`${row}-${lastColIndex}`]
+      }
+      return newProps
+    })
+
+    // Удаляем выделение сегментов последнего столбца
+    setSelectedSegments(prev => {
+      const newSet = new Set(prev)
+      for (let row = 0; row < config.verticalSegments; row++) {
+        newSet.delete(`${row}-${lastColIndex}`)
+      }
+      return newSet
+    })
+
+    setConfig(prev => ({
+      ...prev,
+      horizontalSegments: prev.horizontalSegments - 1
+    }))
+  }
+
   // Функция объединения сегментов
   const handleMergeSegments = () => {
     if (selectedSegments.size < 2) {
@@ -948,6 +1024,36 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
             </h1>
           </div>
           <div className="header-actions">
+            <button
+              className="header-action-btn add-btn"
+              onClick={handleAddRow}
+              title="Добавить новую строку сегментов снизу"
+            >
+              + Строка
+            </button>
+            <button
+              className="header-action-btn remove-btn"
+              onClick={handleRemoveRow}
+              disabled={config.verticalSegments <= 1}
+              title="Удалить последнюю строку сегментов"
+            >
+              − Строка
+            </button>
+            <button
+              className="header-action-btn add-btn"
+              onClick={handleAddColumn}
+              title="Добавить новый столбец сегментов справа"
+            >
+              + Столбец
+            </button>
+            <button
+              className="header-action-btn remove-btn"
+              onClick={handleRemoveColumn}
+              disabled={config.horizontalSegments <= 1}
+              title="Удалить последний столбец сегментов"
+            >
+              − Столбец
+            </button>
             <button
               className="header-action-btn"
               onClick={handleMergeSegments}
