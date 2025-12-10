@@ -1,4 +1,4 @@
-import { useState, useRef, KeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
+import { useState, useRef, useEffect, KeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { vitrageStorage } from '../../services/vitrageStorage'
 import './VitrageConstructor.css'
 
@@ -53,6 +53,84 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const workspaceRef = useRef<HTMLDivElement>(null)
+
+  // ID редактируемого витража (если режим редактирования)
+  const [editingVitrageId, setEditingVitrageId] = useState<string | null>(null)
+
+  // Загрузка витража для редактирования при монтировании
+  useEffect(() => {
+    const loadVitrageForEdit = async () => {
+      const editId = localStorage.getItem('editVitrageId')
+      if (editId) {
+        try {
+          const { data: vitrages } = await vitrageStorage.getAll()
+          const vitrageToEdit = vitrages.find(v => v.id === editId)
+
+          if (vitrageToEdit) {
+            console.log('📝 Загрузка витража для редактирования:', vitrageToEdit)
+
+            // Устанавливаем ID редактируемого витража
+            setEditingVitrageId(editId)
+
+            // Устанавливаем конфигурацию
+            setConfig({
+              marking: vitrageToEdit.name || '',
+              siteManager: vitrageToEdit.siteManager || '',
+              createdDate: vitrageToEdit.creationDate || new Date().toISOString().split('T')[0],
+              horizontalSegments: vitrageToEdit.cols || 0,
+              verticalSegments: vitrageToEdit.rows || 0
+            })
+
+            // Преобразуем свойства сегментов из формата витража в формат редактора
+            const newSegmentProperties: Record<string, SegmentProperties> = {}
+
+            if (vitrageToEdit.segments && Array.isArray(vitrageToEdit.segments)) {
+              vitrageToEdit.segments.forEach((segment: any) => {
+                // Парсим ID сегмента (формат "row-col")
+                let segmentId: string
+
+                if (segment.id && segment.id.includes('-')) {
+                  segmentId = segment.id
+                } else {
+                  // Вычисляем row-col из индекса
+                  const idx = vitrageToEdit.segments.indexOf(segment)
+                  const row = Math.floor(idx / vitrageToEdit.cols)
+                  const col = idx % vitrageToEdit.cols
+                  segmentId = `${row}-${col}`
+                }
+
+                newSegmentProperties[segmentId] = {
+                  fillType: segment.type || 'Пустой',
+                  label: segment.label || '',
+                  formula: segment.formula || '',
+                  width: segment.width ? String(segment.width) : '',
+                  height: segment.height ? String(segment.height) : ''
+                }
+              })
+            }
+
+            setSegmentProperties(newSegmentProperties)
+
+            // Загружаем объединённые сегменты если есть
+            if (vitrageToEdit.mergedSegments) {
+              setMergedSegments(vitrageToEdit.mergedSegments)
+            }
+
+            // Переключаемся в режим редактора
+            setViewMode('editor')
+          }
+
+          // Очищаем ID из localStorage после загрузки
+          localStorage.removeItem('editVitrageId')
+        } catch (error) {
+          console.error('Ошибка при загрузке витража для редактирования:', error)
+          localStorage.removeItem('editVitrageId')
+        }
+      }
+    }
+
+    loadVitrageForEdit()
+  }, [])
 
   // Refs для полей ввода конфигурации
   const markingRef = useRef<HTMLInputElement>(null)
@@ -365,14 +443,28 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
         svgDrawing: svgDrawing,
       }
 
-      const { data: savedVitrage, source } = await vitrageStorage.create(vitrageData)
+      let savedVitrage
+      let source: 'supabase' | 'localStorage'
+
+      // Если редактируем существующий витраж - обновляем, иначе создаём новый
+      if (editingVitrageId) {
+        const result = await vitrageStorage.update(editingVitrageId, vitrageData)
+        savedVitrage = result.data
+        source = result.source
+      } else {
+        const result = await vitrageStorage.create(vitrageData)
+        savedVitrage = result.data
+        source = result.source
+      }
 
       if (savedVitrage) {
         const storageInfo = source === 'supabase'
           ? '☁️ Сохранено в облаке (Supabase)'
           : '📦 Сохранено локально (localStorage)'
 
-        alert(`Витраж "${config.marking}" успешно сохранён!\n\n${storageInfo}\n\nПараметры:\n- Объект: ${selectedObject.name}\n- Сетка: ${cols} × ${rows}\n- Всего сегментов: ${cols * rows}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Типовые витражи"`)
+        const actionText = editingVitrageId ? 'обновлён' : 'сохранён'
+
+        alert(`Витраж "${config.marking}" успешно ${actionText}!\n\n${storageInfo}\n\nПараметры:\n- Объект: ${selectedObject.name}\n- Сетка: ${cols} × ${rows}\n- Всего сегментов: ${cols * rows}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Типовые витражи"`)
 
         // После успешного сохранения возвращаемся к форме конфигурации
         handleBack()
@@ -386,6 +478,7 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
         setSegmentProperties({})
         setMergedSegments({})
         setOriginalPropertiesBeforeMerge({})
+        setEditingVitrageId(null)
       } else {
         throw new Error('Не удалось сохранить витраж')
       }
@@ -1020,7 +1113,7 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
               ← Назад
             </button>
             <h1 className="vitrage-constructor-title">
-              Редактор: {config.marking || 'Витраж'}
+              {editingVitrageId ? 'Редактирование' : 'Редактор'}: {config.marking || 'Витраж'}
             </h1>
           </div>
           <div className="header-actions">
@@ -1071,7 +1164,7 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
               Разделить сегменты
             </button>
             <button className="header-action-btn save-btn" onClick={handleSaveVitrage}>
-              Сохранить витраж
+              {editingVitrageId ? 'Обновить витраж' : 'Сохранить витраж'}
             </button>
           </div>
           {selectedObject && (

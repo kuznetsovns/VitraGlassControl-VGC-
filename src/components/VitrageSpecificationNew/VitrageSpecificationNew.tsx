@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import './VitrageSpecificationNew.css';
 import { vitrageStorage, segmentStorage, type Vitrage, type VitrageSegment } from '../../services/vitrageStorage';
 
@@ -24,6 +25,8 @@ interface VitrageSpecificationNewProps {
 }
 
 export default function VitrageSpecificationNew({ selectedObject }: VitrageSpecificationNewProps) {
+  const navigate = useNavigate();
+  const { id: objectId, department } = useParams();
   const [objects, setObjects] = useState<ProjectObject[]>([]);
   const [vitrages, setVitrages] = useState<VitrageItem[]>([]);
   const [filteredVitrages, setFilteredVitrages] = useState<VitrageItem[]>([]);
@@ -304,6 +307,18 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
     }
   };
 
+  const handleEditVitrage = () => {
+    if (!selectedVitrageForDetails) return;
+
+    // Сохраняем ID витража для редактирования в localStorage
+    localStorage.setItem('editVitrageId', selectedVitrageForDetails.id);
+
+    // Переходим в VitrageConstructor (Редактор)
+    if (objectId && department) {
+      navigate(`/object/${objectId}/department/${department}/vitrage-constructor`);
+    }
+  };
+
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Закрытие меню при клике вне его
@@ -473,6 +488,24 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
                 </div>
               )}
             </div>
+
+            {/* Кнопки действий с выбранным витражом */}
+            <button
+              className="header-action-btn edit-btn"
+              onClick={handleEditVitrage}
+              disabled={!selectedVitrageForDetails}
+              title={selectedVitrageForDetails ? `Редактировать витраж ${selectedVitrageForDetails.name}` : 'Выберите витраж для редактирования'}
+            >
+              ✏️ Редактировать
+            </button>
+            <button
+              className="header-action-btn delete-btn"
+              onClick={handleDeleteVitrage}
+              disabled={!selectedVitrageForDetails}
+              title={selectedVitrageForDetails ? `Удалить витраж ${selectedVitrageForDetails.name}` : 'Выберите витраж для удаления'}
+            >
+              🗑️ Удалить
+            </button>
           </div>
         </div>
 
@@ -589,16 +622,7 @@ export default function VitrageSpecificationNew({ selectedObject }: VitrageSpeci
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h4 style={{ margin: 0 }}>Таблица сегментов</h4>
-              <button
-                className="delete-vitrage-btn"
-                onClick={handleDeleteVitrage}
-                title="Удалить витраж"
-              >
-                🗑️ Удалить витраж
-              </button>
-            </div>
+            <h4>Таблица сегментов</h4>
             <div className="segments-table-wrapper">
               <table className="segments-table">
                 <thead>

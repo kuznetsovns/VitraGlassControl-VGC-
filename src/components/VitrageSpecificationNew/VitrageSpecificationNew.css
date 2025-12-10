@@ -538,6 +538,50 @@
   transform: translateY(0);
 }
 
+/* Кнопки действий в шапке */
+.header-action-btn {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff !important;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.header-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.header-action-btn.edit-btn {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  box-shadow: 0 2px 6px rgba(74, 144, 226, 0.3);
+}
+
+.header-action-btn.edit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #357abd 0%, #2868a0 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(74, 144, 226, 0.4);
+}
+
+.header-action-btn.delete-btn {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
+}
+
+.header-action-btn.delete-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(231, 76, 60, 0.4);
+}
+
 .details-content {
   flex: 1;
   overflow-y: auto;
