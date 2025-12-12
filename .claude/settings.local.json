@@ -37,7 +37,9 @@
       "Bash(npm install:*)",
       "Bash(npm uninstall:*)",
       "Bash(git fetch:*)",
-      "Bash(start http://localhost:5173)"
+      "Bash(start http://localhost:5173)",
+      "Bash(node test-objects.js:*)",
+      "Bash(node test-supabase.js:*)"
     ],
     "deny": [],
     "ask": []

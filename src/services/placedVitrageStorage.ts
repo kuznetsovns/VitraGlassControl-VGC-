@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { v4 as uuidv4 } from 'uuid'
 
 // Типы данных для размещенных витражей
 export interface PlacedVitrageData {
@@ -74,7 +75,7 @@ class LocalStorageService {
     const vitrages = await this.getAll()
     const newVitrage = {
       ...data,
-      id: data.id || Date.now().toString(),
+      id: data.id || uuidv4(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -194,13 +195,20 @@ export const placedVitrageStorage = {
     usingFallback: boolean
   }> {
     try {
+      console.log('🔍 Loading vitrages for defect tracking, object:', objectId)
+
       const { data, error } = await supabase
         .from('placed_vitrages')
         .select('*')
         .eq('object_id', objectId)
         .order('full_id', { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Supabase error loading vitrages:', error)
+        throw error
+      }
+
+      console.log(`📦 Loaded ${data?.length || 0} vitrages from Supabase`)
 
       // Фильтруем только витражи с назначенными ID
       const vitragesWithIds = (data || []).filter(vitrage => {
@@ -216,6 +224,7 @@ export const placedVitrageStorage = {
         usingFallback: false
       }
     } catch (error) {
+      console.error('⚠️ Exception loading vitrages:', error)
       console.warn('⚠️ Using localStorage fallback')
       const data = await localStorageService.getAll(objectId)
 
@@ -243,6 +252,15 @@ export const placedVitrageStorage = {
   }> {
     try {
       console.log('📝 Creating placed vitrage:', vitrageData.vitrage_name)
+      console.log('📋 Vitrage data:', {
+        id: vitrageData.id,
+        object_id: vitrageData.object_id,
+        floor_plan_id: vitrageData.floor_plan_id,
+        vitrage_id: vitrageData.vitrage_id,
+        vitrage_name: vitrageData.vitrage_name,
+        position_x: vitrageData.position_x,
+        position_y: vitrageData.position_y
+      })
 
       // Инициализируем счетчики дефектов если не заданы
       const dataToInsert = {
@@ -253,6 +271,7 @@ export const placedVitrageStorage = {
         inspection_status: vitrageData.inspection_status || 'not_checked'
       }
 
+      console.log('💾 Inserting into Supabase...')
       const { data, error } = await supabase
         .from('placed_vitrages')
         .insert([dataToInsert])
@@ -260,17 +279,19 @@ export const placedVitrageStorage = {
         .single()
 
       if (error) {
-        console.error('❌ Supabase error:', error)
+        console.error('❌ Supabase insert error:', error)
+        console.error('❌ Error details:', JSON.stringify(error, null, 2))
         throw error
       }
 
-      console.log('✅ Placed vitrage created in Supabase')
+      console.log('✅ Placed vitrage created in Supabase:', data?.id)
       return {
         data,
         error: null,
         usingFallback: false
       }
     } catch (error) {
+      console.error('⚠️ Exception caught:', error)
       console.warn('⚠️ Using localStorage fallback to create')
       const dataToInsert = {
         ...vitrageData,
@@ -343,6 +364,9 @@ export const placedVitrageStorage = {
     usingFallback: boolean
   }> {
     try {
+      console.log('🔧 Updating segment defects for vitrage:', vitrageId)
+      console.log('📋 Segment defects:', segmentDefects)
+
       // Подсчитываем количество дефектов
       let totalDefectsCount = 0
       let defectiveSegmentsCount = 0
@@ -354,6 +378,8 @@ export const placedVitrageStorage = {
           totalDefectsCount += segment.defects.length
         }
       }
+
+      console.log(`📊 Defects count: ${totalDefectsCount} defects in ${defectiveSegmentsCount} segments`)
 
       const { data, error } = await supabase
         .from('placed_vitrages')
@@ -367,7 +393,10 @@ export const placedVitrageStorage = {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Supabase error updating defects:', error)
+        throw error
+      }
 
       console.log(`✅ Updated defects for vitrage ${vitrageId}: ${totalDefectsCount} defects in ${defectiveSegmentsCount} segments`)
 
@@ -377,6 +406,7 @@ export const placedVitrageStorage = {
         usingFallback: false
       }
     } catch (error) {
+      console.error('⚠️ Exception updating defects:', error)
       console.warn('⚠️ Using localStorage fallback')
 
       // Подсчитываем для localStorage тоже

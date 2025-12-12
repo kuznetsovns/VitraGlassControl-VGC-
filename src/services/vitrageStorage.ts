@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 // Интерфейс сегмента витража
 export interface VitrageSegment {
@@ -238,7 +239,7 @@ export const vitrageStorage = {
 
       const newVitrage: Vitrage = {
         ...vitrage,
-        id: Date.now().toString(),
+        id: uuidv4(),
         createdAt: new Date(),
       };
 

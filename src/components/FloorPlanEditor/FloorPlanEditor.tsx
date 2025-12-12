@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 import './FloorPlanEditor.css'
 import { floorPlanStorage, type FloorPlanData } from '../../services/floorPlanStorage'
 import { vitrageStorage } from '../../services/vitrageStorage'
 import { placedVitrageStorage, type PlacedVitrageData } from '../../services/placedVitrageStorage'
+import { defectVitrageStorage, type DefectVitrageData } from '../../services/defectVitrageStorage'
 import { DefectWorkspace } from '../DefectTracking/components/DefectWorkspace/DefectWorkspace'
 import { useDefectData } from '../DefectTracking/hooks/useDefectData'
 import type { VitrageItem } from '../DefectTracking/types'
 import { vitrageSegmentIdStorage } from '../../services/vitrageSegmentIdStorage'
+import { migrateLocalStorageToSupabase } from '../../utils/migrateLocalStorageToSupabase'
 
 // Re-define VitrageGrid interface locally since it's not exported from GraphicsEditor
 interface VitrageGrid {
@@ -469,6 +472,53 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     }
   }, [currentPlan, savedPlans, selectedObject?.id])
 
+  // Migrate localStorage vitrages to Supabase
+  const handleMigrateToSupabase = async () => {
+    if (!confirm('Мигрировать старые витражи из localStorage в Supabase?\n\nЭто перенесет все витражи которые были созданы до исправления UUID.')) {
+      return
+    }
+
+    const result = await migrateLocalStorageToSupabase()
+
+    const message = `Миграция завершена:\n\n` +
+      `✅ Перенесено: ${result.migrated}\n` +
+      `❌ Ошибок: ${result.errors}\n\n` +
+      `Детали:\n${result.details.join('\n')}`
+
+    alert(message)
+
+    // Перезагрузить планы после миграции
+    if (result.migrated > 0 && selectedObject?.id) {
+      const { data } = await floorPlanStorage.getByObjectId(selectedObject.id)
+      if (data) {
+        const plans: FloorPlan[] = data.map(plan => ({
+          id: plan.id || uuidv4(),
+          name: plan.name,
+          corpus: plan.corpus,
+          section: plan.section || '',
+          floor: plan.floor,
+          walls: plan.walls || [],
+          rooms: plan.rooms || [],
+          placedVitrages: (plan.placed_vitrages || []).map(pv => ({
+            id: pv.id || uuidv4(),
+            vitrageId: pv.vitrage_id,
+            x: pv.position_x || 0,
+            y: pv.position_y || 0,
+            rotation: pv.rotation || 0,
+            scale: pv.scale || 1.0,
+            segmentIDs: pv.segment_ids || {}
+          })),
+          scale: plan.scale || 1.0,
+          backgroundImage: plan.image_data,
+          backgroundOpacity: plan.background_opacity ?? 0.5,
+          createdAt: new Date(plan.created_at || Date.now()),
+          updatedAt: new Date(plan.updated_at || Date.now())
+        }))
+        setSavedPlans(plans)
+      }
+    }
+  }
+
   // Auto-save when plan changes
   useEffect(() => {
     if (!currentPlan || !hasUnsavedChanges) return
@@ -856,7 +906,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     if (!currentPlan || !selectedVitrageForPlacement || !selectedObject?.id) return
 
     const newPlacedVitrage: PlacedVitrage = {
-      id: Date.now().toString(),
+      id: uuidv4(), // Generate UUID instead of timestamp
       vitrageId: selectedVitrageForPlacement.id,
       x: x,
       y: y,
@@ -865,6 +915,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     }
 
     // Create placed vitrage in Supabase
+    console.log('🏢 Selected object:', selectedObject)
+    console.log('📍 Current plan:', { id: currentPlan.id, name: currentPlan.name })
+
     const placedVitrageData: PlacedVitrageData = {
       id: newPlacedVitrage.id,
       object_id: selectedObject.id,
@@ -888,6 +941,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       segment_defects: {}
     }
 
+    console.log('🔍 About to call placedVitrageStorage.create with data:', placedVitrageData)
     const { data, error } = await placedVitrageStorage.create(placedVitrageData)
 
     if (error) {
@@ -1517,6 +1571,38 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
 
       // Save segment IDs to vitrage_segment_ids table
       await vitrageSegmentIdStorage.saveForPlacedVitrage(placedVitrage.id, segmentIDsTemp)
+
+      // Create or update record in defect_vitrages table for defect tracking
+      const defectVitrageData: DefectVitrageData = {
+        object_id: selectedObject.id,
+        placed_vitrage_id: placedVitrage.id,
+        vitrage_id: placedVitrage.vitrageId,
+        vitrage_name: vitrage.name,
+        vitrage_data: {
+          rows: vitrage.rows,
+          cols: vitrage.cols,
+          totalWidth: vitrage.totalWidth,
+          totalHeight: vitrage.totalHeight,
+          segments: vitrage.segments,
+          svgDrawing: vitrage.svgDrawing
+        },
+        id_object: firstSegmentID.object,
+        id_corpus: firstSegmentID.corpus,
+        id_section: firstSegmentID.section,
+        id_floor: firstSegmentID.floor,
+        id_apartment: firstSegmentID.apartment,
+        id_vitrage_number: firstSegmentID.vitrageNumber,
+        id_vitrage_name: firstSegmentID.vitrageName,
+        id_vitrage_section: firstSegmentID.vitrageSection,
+        inspection_status: 'not_checked'
+      }
+
+      const defectResult = await defectVitrageStorage.upsert(defectVitrageData)
+      if (defectResult.error) {
+        console.error('Error saving to defect_vitrages:', defectResult.error)
+      } else {
+        console.log('✅ Vitrage added to defect tracking')
+      }
     }
 
     // Update local state
@@ -1594,6 +1680,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
               }
               else if (action === 'save' && currentPlan) saveCurrentPlan()
               else if (action === 'duplicate' && currentPlan) openDuplicatePlanDialog(currentPlan)
+              else if (action === 'migrate') handleMigrateToSupabase()
               e.target.value = '' // Reset selection
             }}
             value=""
@@ -1602,6 +1689,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
             <option value="new">📋 Новый план</option>
             {currentPlan && <option value="save">💾 Сохранить</option>}
             {currentPlan && <option value="duplicate">📋 Дублировать план</option>}
+            <option value="migrate">🔄 Миграция в Supabase</option>
           </select>
         </div>
 

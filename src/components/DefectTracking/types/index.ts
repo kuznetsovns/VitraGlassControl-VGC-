@@ -19,6 +19,9 @@ export interface VitrageItem {
   objectId: string
   objectName?: string
   versionId?: string
+  corpus?: string
+  section?: string
+  floor?: string
   rows: number
   cols: number
   totalWidth: number
@@ -26,6 +29,13 @@ export interface VitrageItem {
   segments: VitrageSegment[]
   svgDrawing?: string
   createdAt: Date
+  segmentDefects?: Record<string, any>
+  inspectionStatus?: string
+  defectiveSegmentsCount?: number
+  totalDefectsCount?: number
+  marking?: string
+  vitrageName?: string
+  vitrageData?: any
 }
 
 export interface VitrageSegment {

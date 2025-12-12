@@ -31,6 +31,27 @@ export default function DefectTracking({ selectedObject }: DefectTrackingProps) 
     setSelectedVitrageForView(null)
   }
 
+  const handleVitrageDelete = async (vitrage: VitrageItem) => {
+    try {
+      // Импортируем defectVitrageStorage динамически
+      const { defectVitrageStorage } = await import('../../services/defectVitrageStorage')
+
+      const { error } = await defectVitrageStorage.delete(vitrage.id)
+
+      if (error) {
+        alert('Ошибка при удалении витража из дефектовки')
+        console.error('Delete error:', error)
+      } else {
+        alert(`Витраж "${vitrage.name}" удален из дефектовки`)
+        // Перезагружаем страницу чтобы обновить список
+        window.location.reload()
+      }
+    } catch (error) {
+      console.error('Error deleting vitrage:', error)
+      alert('Произошла ошибка при удалении')
+    }
+  }
+
   // Если выбран витраж для просмотра - показываем полноэкранную отрисовку
   if (selectedVitrageForView) {
     return (
@@ -56,6 +77,7 @@ export default function DefectTracking({ selectedObject }: DefectTrackingProps) 
       storageSource={defectData.storageSource}
       segmentDefectsData={defectData.segmentDefectsData}
       onVitrageClick={handleVitrageClick}
+      onVitrageDelete={handleVitrageDelete}
       showExportMenu={exportControls.showExportMenu}
       setShowExportMenu={exportControls.setShowExportMenu}
       onExportAll={exportControls.handleExportAll}
