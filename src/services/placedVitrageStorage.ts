@@ -187,7 +187,7 @@ export const placedVitrageStorage = {
     }
   },
 
-  // Получить витражи для дефектовки (только с дефектами)
+  // Получить витражи для дефектовки (все витражи с назначенными ID)
   async getForDefectTracking(objectId: string): Promise<{
     data: PlacedVitrageData[],
     error: any,
@@ -202,35 +202,16 @@ export const placedVitrageStorage = {
 
       if (error) throw error
 
-      // Фильтруем только витражи с дефектами
-      const vitragesWithDefects = (data || []).filter(vitrage => {
-        // Проверяем есть ли дефекты в segment_defects
-        if (vitrage.segment_defects && Object.keys(vitrage.segment_defects).length > 0) {
-          // Проверяем есть ли хотя бы один сегмент с дефектами
-          for (const segmentKey in vitrage.segment_defects) {
-            const segment = vitrage.segment_defects[segmentKey]
-            if (segment.defects && segment.defects.length > 0) {
-              return true // Есть дефекты
-            }
-          }
-        }
-
-        // Также проверяем счетчики дефектов
-        if ((vitrage.total_defects_count || 0) > 0) {
-          return true
-        }
-
-        if ((vitrage.defective_segments_count || 0) > 0) {
-          return true
-        }
-
-        return false // Нет дефектов
+      // Фильтруем только витражи с назначенными ID
+      const vitragesWithIds = (data || []).filter(vitrage => {
+        // Проверяем что есть full_id (значит ID назначен)
+        return vitrage.full_id && vitrage.full_id.length > 0
       })
 
-      console.log(`🎯 Filtered ${vitragesWithDefects.length} vitrages with defects from ${data?.length || 0} total`)
+      console.log(`🎯 Filtered ${vitragesWithIds.length} vitrages with IDs from ${data?.length || 0} total`)
 
       return {
-        data: vitragesWithDefects,
+        data: vitragesWithIds,
         error: null,
         usingFallback: false
       }
@@ -238,28 +219,16 @@ export const placedVitrageStorage = {
       console.warn('⚠️ Using localStorage fallback')
       const data = await localStorageService.getAll(objectId)
 
-      // Фильтруем только витражи с дефектами
-      const vitragesWithDefects = data.filter(vitrage => {
-        if (vitrage.segment_defects && Object.keys(vitrage.segment_defects).length > 0) {
-          for (const segmentKey in vitrage.segment_defects) {
-            const segment = vitrage.segment_defects[segmentKey]
-            if (segment.defects && segment.defects.length > 0) {
-              return true
-            }
-          }
-        }
-
-        if ((vitrage.total_defects_count || 0) > 0) return true
-        if ((vitrage.defective_segments_count || 0) > 0) return true
-
-        return false
+      // Фильтруем только витражи с назначенными ID
+      const vitragesWithIds = data.filter(vitrage => {
+        return vitrage.full_id && vitrage.full_id.length > 0
       })
 
       // Сортируем по full_id
-      vitragesWithDefects.sort((a, b) => (a.full_id || '').localeCompare(b.full_id || ''))
+      vitragesWithIds.sort((a, b) => (a.full_id || '').localeCompare(b.full_id || ''))
 
       return {
-        data: vitragesWithDefects,
+        data: vitragesWithIds,
         error: null,
         usingFallback: true
       }

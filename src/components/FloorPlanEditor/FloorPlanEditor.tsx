@@ -6,6 +6,7 @@ import { placedVitrageStorage, type PlacedVitrageData } from '../../services/pla
 import { DefectWorkspace } from '../DefectTracking/components/DefectWorkspace/DefectWorkspace'
 import { useDefectData } from '../DefectTracking/hooks/useDefectData'
 import type { VitrageItem } from '../DefectTracking/types'
+import { vitrageSegmentIdStorage } from '../../services/vitrageSegmentIdStorage'
 
 // Re-define VitrageGrid interface locally since it's not exported from GraphicsEditor
 interface VitrageGrid {
@@ -1513,6 +1514,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       } else {
         console.log('✅ Vitrage ID updated in Supabase')
       }
+
+      // Save segment IDs to vitrage_segment_ids table
+      await vitrageSegmentIdStorage.saveForPlacedVitrage(placedVitrage.id, segmentIDsTemp)
     }
 
     // Update local state
