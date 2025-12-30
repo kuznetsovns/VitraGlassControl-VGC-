@@ -190,10 +190,18 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Function to load vitrages from specification storage (Supabase or localStorage)
+  // Загружает только витражи текущего объекта из "Типовых витражей"
   const loadVitragesFromStorage = useCallback(async () => {
+    if (!selectedObject?.id) {
+      console.log('⚠️ Объект не выбран, витражи не загружаются')
+      setSavedVitrages([])
+      return
+    }
+
     try {
-      const { data, source } = await vitrageStorage.getAll()
-      console.log(`📋 Витражи загружены из ${source} для плана этажа:`, data.length)
+      // Загружаем только витражи для текущего объекта
+      const { data, source } = await vitrageStorage.getAll(selectedObject.id)
+      console.log(`📋 Витражи загружены из ${source} для объекта "${selectedObject.name}":`, data.length)
 
       // Преобразуем данные в формат VitrageGrid
       const vitrageGrids: VitrageGrid[] = data.map((v) => ({
@@ -212,8 +220,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       setSavedVitrages(vitrageGrids)
     } catch (error) {
       console.error('Ошибка загрузки витражей:', error)
+      setSavedVitrages([])
     }
-  }, [])
+  }, [selectedObject?.id, selectedObject?.name])
 
   // Load saved data on mount
   useEffect(() => {
@@ -2261,9 +2270,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       {showVitrageSelector && (
         <div className="modal-overlay">
           <div className="modal large">
-            <h3>Выберите витраж со страницы "Типовые витражи"</h3>
+            <h3 style={{flexShrink: 0}}>Выберите витраж со страницы "Типовые витражи"</h3>
             {savedVitrages.length > 0 ? (
-              <>
+              <div className="modal-content-scroll">
                 <p style={{marginBottom: '16px'}}>
                   Выберите витраж из базы данных типовых витражей для размещения на плане этажа
                 </p>
@@ -2272,7 +2281,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                 <div style={{marginBottom: '20px'}}>
                   <input
                     type="text"
-                    placeholder="🔍 Поиск по названию витража..."
+                    placeholder="Поиск по названию витража..."
                     value={vitrageSearchQuery}
                     onChange={(e) => setVitrageSearchQuery(e.target.value)}
                     style={{
@@ -2282,7 +2291,8 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                       border: '2px solid #e0e0e0',
                       borderRadius: '8px',
                       outline: 'none',
-                      transition: 'border-color 0.2s'
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => e.target.style.borderColor = '#4a90e2'}
                     onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
@@ -2322,7 +2332,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
                     </div>
                   ))}
                 </div>
-              </>
+              </div>
             ) : (
               <div style={{padding: '40px', textAlign: 'center'}}>
                 <p style={{marginBottom: '16px', fontSize: '16px', fontWeight: '600'}}>
