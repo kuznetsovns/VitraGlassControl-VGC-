@@ -189,6 +189,15 @@
   box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
 }
 
+.vitrage-card.all-fixed {
+  border-color: #43a047;
+  background: linear-gradient(135deg, #f1f8e9 0%, #ffffff 100%);
+}
+
+.vitrage-card.all-fixed:hover {
+  box-shadow: 0 4px 16px rgba(67, 160, 71, 0.3);
+}
+
 .vitrage-card-header {
   display: flex;
   justify-content: space-between;
@@ -223,6 +232,11 @@
 .vitrage-badge.defects-badge {
   color: #ff6b6b;
   background: rgba(255, 107, 107, 0.15);
+}
+
+.vitrage-badge.fixed-badge {
+  color: #43a047;
+  background: rgba(67, 160, 71, 0.15);
 }
 
 .vitrage-card-info {
@@ -996,12 +1010,13 @@
   display: flex;
   justify-content: center;
   flex-shrink: 0;
+  gap: 12px;
 }
 
 .save-segment-btn {
-  width: 100%;
-  padding: 14px 24px;
-  font-size: 16px;
+  flex: 1;
+  padding: 14px 20px;
+  font-size: 15px;
   font-weight: 700;
   color: #ffffff;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1024,6 +1039,34 @@
 .save-segment-btn:active {
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.fixed-segment-btn {
+  flex: 1;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(67, 160, 71, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.fixed-segment-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(67, 160, 71, 0.4);
+}
+
+.fixed-segment-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(67, 160, 71, 0.3);
 }
 
 /* Кнопка экспорта с выпадающим меню */

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 export function useCanvasControls(selectedVitrageId?: string) {
   const [zoom, setZoom] = useState(1)
@@ -6,6 +6,7 @@ export function useCanvasControls(selectedVitrageId?: string) {
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const svgContainerRef = useRef<HTMLDivElement>(null)
+  const workspaceRef = useRef<HTMLDivElement>(null)
 
   // Автоматическая подгонка масштаба витража под размер рабочего пространства
   useEffect(() => {
@@ -43,6 +44,26 @@ export function useCanvasControls(selectedVitrageId?: string) {
     return () => clearTimeout(timer)
   }, [selectedVitrageId])
 
+  // Native wheel handler with passive: false to allow preventDefault
+  const handleNativeWheel = useCallback((e: WheelEvent) => {
+    if (e.ctrlKey) {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? 0.9 : 1.1
+      setZoom(prev => Math.min(Math.max(prev * delta, 0.1), 5))
+    }
+  }, [])
+
+  // Attach native wheel listener with passive: false
+  useEffect(() => {
+    const workspace = workspaceRef.current
+    if (!workspace) return
+
+    workspace.addEventListener('wheel', handleNativeWheel, { passive: false })
+    return () => {
+      workspace.removeEventListener('wheel', handleNativeWheel)
+    }
+  }, [handleNativeWheel])
+
   const handleZoomIn = () => {
     setZoom(prev => Math.min(prev * 1.2, 5))
   }
@@ -56,12 +77,9 @@ export function useCanvasControls(selectedVitrageId?: string) {
     setPan({ x: 0, y: 0 })
   }
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey) {
-      e.preventDefault()
-      const delta = e.deltaY > 0 ? 0.9 : 1.1
-      setZoom(prev => Math.min(Math.max(prev * delta, 0.1), 5))
-    }
+  // React wheel handler (for non-ctrl wheel events)
+  const handleWheel = (_e: React.WheelEvent) => {
+    // Ctrl+wheel is handled by native listener
   }
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
@@ -90,6 +108,7 @@ export function useCanvasControls(selectedVitrageId?: string) {
     pan,
     isPanning,
     svgContainerRef,
+    workspaceRef,
     handleZoomIn,
     handleZoomOut,
     handleResetZoom,

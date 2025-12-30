@@ -1,10 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { VitrageItem } from '../../types'
 import { useCanvasControls } from '../../hooks/useCanvasControls'
-import { useSegmentSelection } from '../../hooks/useSegmentSelection'
 import type { SegmentDefectData } from '../../../../services/defectStorage'
 import { WorkspaceHeader } from './WorkspaceHeader'
-import { SvgViewer } from './SvgViewer'
+import { VitrageGridRenderer } from './VitrageGridRenderer'
 import { DefectPanel } from '../DefectPanel/DefectPanel'
 
 interface DefectWorkspaceProps {
@@ -43,24 +42,33 @@ export function DefectWorkspace({
   addNewDefect
 }: DefectWorkspaceProps) {
   const canvasControls = useCanvasControls(vitrage.id)
-  const segmentSelection = useSegmentSelection(
-    vitrage,
-    canvasControls.svgContainerRef,
-    segmentDefectsData
-  )
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null)
+  const [showDefectPanel, setShowDefectPanel] = useState(false)
 
   // Проверяем, есть ли дефекты у этого витража
   const hasDefects = Array.from(segmentDefectsData.entries()).some(
     ([key, data]) => key.startsWith(vitrage.id) && data.defects.length > 0
   )
 
+  // Обработка клика на сегмент
+  const handleSegmentClick = (segmentIndex: number) => {
+    setSelectedSegmentId(String(segmentIndex))
+    setShowDefectPanel(true)
+  }
+
+  // Закрытие панели дефектов
+  const handleCloseDefectPanel = () => {
+    setSelectedSegmentId(null)
+    setShowDefectPanel(false)
+  }
+
   // Обработка клавиши Escape для выхода из дефектовки
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         // Если открыта панель дефектов, закрываем её
-        if (segmentSelection.showDefectPanel) {
-          segmentSelection.handleCloseDefectPanel()
+        if (showDefectPanel) {
+          handleCloseDefectPanel()
         } else {
           // Если панель закрыта, выходим из дефектовки
           onBack()
@@ -70,7 +78,7 @@ export function DefectWorkspace({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [segmentSelection.showDefectPanel, segmentSelection.handleCloseDefectPanel, onBack])
+  }, [showDefectPanel, onBack])
 
   return (
     <div className="defect-tracking-fullscreen">
@@ -85,14 +93,18 @@ export function DefectWorkspace({
         onResetZoom={canvasControls.handleResetZoom}
       />
 
-      <div className={`workspace-container ${segmentSelection.showDefectPanel ? 'with-panel' : ''}`}>
+      <div className={`workspace-container ${showDefectPanel ? 'with-panel' : ''}`}>
         <div className="workspace-layout">
-          <SvgViewer
+          <VitrageGridRenderer
             vitrage={vitrage}
             zoom={canvasControls.zoom}
             pan={canvasControls.pan}
             isPanning={canvasControls.isPanning}
             svgContainerRef={canvasControls.svgContainerRef}
+            workspaceRef={canvasControls.workspaceRef}
+            segmentDefectsData={segmentDefectsData}
+            selectedSegmentId={selectedSegmentId}
+            onSegmentClick={handleSegmentClick}
             onWheel={canvasControls.handleWheel}
             onMouseDown={canvasControls.handleCanvasMouseDown}
             onMouseMove={canvasControls.handleCanvasMouseMove}
@@ -101,15 +113,15 @@ export function DefectWorkspace({
         </div>
 
         {/* Панель дефектов */}
-        {segmentSelection.showDefectPanel && segmentSelection.selectedSegmentId && (
+        {showDefectPanel && selectedSegmentId && (
           <DefectPanel
-            selectedSegmentId={segmentSelection.selectedSegmentId}
+            selectedSegmentId={selectedSegmentId}
             selectedVitrage={vitrage}
             availableDefects={availableDefects}
             loadSegmentData={loadSegmentData}
             saveSegmentData={saveSegmentData}
             addNewDefect={addNewDefect}
-            onClose={segmentSelection.handleCloseDefectPanel}
+            onClose={handleCloseDefectPanel}
           />
         )}
       </div>

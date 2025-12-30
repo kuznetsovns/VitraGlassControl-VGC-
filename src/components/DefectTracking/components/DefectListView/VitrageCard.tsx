@@ -10,16 +10,58 @@ interface VitrageCardProps {
 }
 
 export function VitrageCard({ vitrage, objects, segmentDefectsData, onClick }: VitrageCardProps) {
-  // Подсчитываем количество дефектов для данного витража
-  const defectsCount = Array.from(segmentDefectsData.entries())
-    .filter(([key, data]) => key.startsWith(vitrage.id) && data.defects.length > 0)
-    .reduce((total, [, data]) => total + data.defects.length, 0)
+  // Подсчитываем количество дефектов и исправленных сегментов из segmentDefectsData (Map)
+  let defectsFromMap = 0
+  let defectiveSegmentsFromMap = 0
+  Array.from(segmentDefectsData.entries())
+    .filter(([key]) => key.startsWith(vitrage.id))
+    .forEach(([, data]) => {
+      if (data.defects && data.defects.length > 0) {
+        defectsFromMap += data.defects.length
+        defectiveSegmentsFromMap++
+      }
+    })
+
+  // Также проверяем дефекты, хранящиеся напрямую в витраже (из placedVitrageStorage)
+  let defectsFromVitrage = 0
+  let defectiveSegmentsFromVitrage = 0
+  let fixedSegmentsCount = 0
+
+  if (vitrage.segmentDefects) {
+    for (const segmentKey in vitrage.segmentDefects) {
+      const segment = vitrage.segmentDefects[segmentKey]
+      if (segment?.defects && segment.defects.length > 0) {
+        defectsFromVitrage += segment.defects.length
+        defectiveSegmentsFromVitrage++
+      }
+      // Считаем исправленные сегменты (без дефектов и со статусом fixed)
+      if (segment?.status === 'fixed' && (!segment.defects || segment.defects.length === 0)) {
+        fixedSegmentsCount++
+      }
+    }
+  }
+
+  // Используем актуальные данные о дефектах (не из закешированного totalDefectsCount)
+  const defectsCount = Math.max(defectsFromMap, defectsFromVitrage)
+  const defectiveSegmentsCount = Math.max(defectiveSegmentsFromMap, defectiveSegmentsFromVitrage)
 
   const hasDefects = defectsCount > 0
+  const hasFixedSegments = fixedSegmentsCount > 0
+
+  // Карточка зелёная только если ВСЕ дефекты исправлены (нет активных дефектов, но есть исправленные)
+  const allFixed = hasFixedSegments && !hasDefects
+
+  // Определяем CSS класс для карточки
+  let cardClass = 'vitrage-card'
+  if (hasDefects) {
+    cardClass += ' has-defects'
+  } else if (allFixed) {
+    cardClass += ' all-fixed'
+  }
 
   return (
     <div
-      className={`vitrage-card ${hasDefects ? 'has-defects' : ''}`}
+      className={cardClass}
       onClick={() => onClick(vitrage)}
     >
       <div className="vitrage-card-header">
@@ -29,8 +71,13 @@ export function VitrageCard({ vitrage, objects, segmentDefectsData, onClick }: V
             {vitrage.rows} × {vitrage.cols}
           </span>
           {hasDefects && (
-            <span className="vitrage-badge defects-badge" title={`Найдено дефектов: ${defectsCount}`}>
-              ⚠️ {defectsCount}
+            <span className="vitrage-badge defects-badge" title={`Сегментов с дефектами: ${defectiveSegmentsCount}, всего дефектов: ${defectsCount}`}>
+              ⚠️ {defectiveSegmentsCount}
+            </span>
+          )}
+          {hasFixedSegments && (
+            <span className="vitrage-badge fixed-badge" title={`Исправлено сегментов: ${fixedSegmentsCount}`}>
+              ✅ {fixedSegmentsCount}
             </span>
           )}
         </div>

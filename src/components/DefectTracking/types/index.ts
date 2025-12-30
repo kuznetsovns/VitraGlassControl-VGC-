@@ -14,6 +14,7 @@ export interface ObjectVersion {
 export interface VitrageItem {
   id: string
   name: string
+  marking?: string
   siteManager?: string
   creationDate?: string
   objectId: string
@@ -25,7 +26,12 @@ export interface VitrageItem {
   totalHeight: number
   segments: VitrageSegment[]
   svgDrawing?: string
-  createdAt: Date
+  vitrageData?: any
+  segmentDefects?: Record<string, any>
+  inspectionStatus?: string
+  defectiveSegmentsCount?: number
+  totalDefectsCount?: number
+  createdAt: Date | string
 }
 
 export interface VitrageSegment {

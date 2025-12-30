@@ -86,13 +86,35 @@ export function DefectPanel({
       }
     )
 
-    if (result.success) {
-      const storageInfo = result.source === 'supabase'
-        ? '☁️ Сохранено в облаке'
-        : '📦 Сохранено локально'
-      alert(`Данные сегмента сохранены!\n${storageInfo}`)
+    if (!result.success) {
+      console.error('Ошибка при сохранении данных сегмента')
     } else {
-      alert('Произошла ошибка при сохранении данных')
+      console.log(`✅ Данные сегмента сохранены (${result.source})`)
+      onClose() // Закрываем панель после успешного сохранения
+    }
+  }
+
+  // Отметить все дефекты как исправленные (очистить список дефектов)
+  const handleMarkAsFixed = async () => {
+    const result = await saveSegmentData(
+      selectedVitrage.id,
+      selectedSegmentId,
+      {
+        inspectionDate: new Date().toISOString().split('T')[0], // Текущая дата
+        inspector,
+        siteManager,
+        defects: [], // Очищаем все дефекты
+        markAsFixed: true // Флаг что сегмент исправлен
+      } as any
+    )
+
+    if (result.success) {
+      setSelectedDefects([]) // Очищаем локальное состояние
+      setInspectionDate(new Date().toISOString().split('T')[0])
+      console.log(`✅ Дефекты отмечены как исправленные (${result.source})`)
+      onClose() // Закрываем панель после успешного сохранения
+    } else {
+      console.error('Ошибка при отметке дефектов как исправленных')
     }
   }
 
@@ -139,11 +161,16 @@ export function DefectPanel({
         />
       </div>
 
-      {/* Кнопка сохранения */}
+      {/* Кнопки действий */}
       <div className="panel-actions">
         <button className="save-segment-btn" onClick={handleSave}>
-          💾 Сохранить данные сегмента
+          💾 Сохранить
         </button>
+        {selectedDefects.length > 0 && (
+          <button className="fixed-segment-btn" onClick={handleMarkAsFixed}>
+            ✅ Исправлено
+          </button>
+        )}
       </div>
     </div>
   )

@@ -74,7 +74,7 @@ class LocalStorageService {
     const vitrages = await this.getAll()
     const newVitrage = {
       ...data,
-      id: data.id || Date.now().toString(),
+      id: data.id || crypto.randomUUID(), // Use UUID format for compatibility with Supabase
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -272,16 +272,36 @@ export const placedVitrageStorage = {
     error: any,
     usingFallback: boolean
   }> {
+    // Helper to check if string is valid UUID format
+    const isValidUUID = (str: string | undefined | null): boolean => {
+      if (!str) return false
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      return uuidRegex.test(str)
+    }
+
     try {
       console.log('📝 Creating placed vitrage:', vitrageData.vitrage_name)
 
-      // Инициализируем счетчики дефектов если не заданы
-      const dataToInsert = {
-        ...vitrageData,
+      // Remove id and floor_plan_id if not valid UUID - let Supabase generate them
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, floor_plan_id, ...restData } = vitrageData
+
+      const dataToInsert: any = {
+        ...restData,
         total_defects_count: vitrageData.total_defects_count || 0,
         defective_segments_count: vitrageData.defective_segments_count || 0,
         segment_defects: vitrageData.segment_defects || {},
         inspection_status: vitrageData.inspection_status || 'not_checked'
+      }
+
+      // Only include id if it's a valid UUID
+      if (isValidUUID(id)) {
+        dataToInsert.id = id
+      }
+
+      // Only include floor_plan_id if it's a valid UUID
+      if (isValidUUID(floor_plan_id)) {
+        dataToInsert.floor_plan_id = floor_plan_id
       }
 
       const { data, error } = await supabase
@@ -295,7 +315,7 @@ export const placedVitrageStorage = {
         throw error
       }
 
-      console.log('✅ Placed vitrage created in Supabase')
+      console.log('✅ Placed vitrage created in Supabase with ID:', data?.id)
       return {
         data,
         error: null,
@@ -305,6 +325,7 @@ export const placedVitrageStorage = {
       console.warn('⚠️ Using localStorage fallback to create')
       const dataToInsert = {
         ...vitrageData,
+        id: vitrageData.id || crypto.randomUUID(),
         total_defects_count: vitrageData.total_defects_count || 0,
         defective_segments_count: vitrageData.defective_segments_count || 0,
         segment_defects: vitrageData.segment_defects || {},
@@ -373,19 +394,40 @@ export const placedVitrageStorage = {
     error: any,
     usingFallback: boolean
   }> {
-    try {
-      // Подсчитываем количество дефектов
-      let totalDefectsCount = 0
-      let defectiveSegmentsCount = 0
+    // Helper to check if string is valid UUID format
+    const isValidUUID = (str: string): boolean => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      return uuidRegex.test(str)
+    }
 
-      for (const segmentKey in segmentDefects) {
-        const segment = segmentDefects[segmentKey]
-        if (segment.defects && segment.defects.length > 0) {
-          defectiveSegmentsCount++
-          totalDefectsCount += segment.defects.length
-        }
+    // Подсчитываем количество дефектов
+    let totalDefectsCount = 0
+    let defectiveSegmentsCount = 0
+
+    for (const segmentKey in segmentDefects) {
+      const segment = segmentDefects[segmentKey]
+      if (segment.defects && segment.defects.length > 0) {
+        defectiveSegmentsCount++
+        totalDefectsCount += segment.defects.length
       }
+    }
 
+    // Skip Supabase if ID is not valid UUID (old timestamp format)
+    if (!isValidUUID(vitrageId)) {
+      console.warn('⚠️ Vitrage ID is not UUID format, using localStorage:', vitrageId)
+      const data = await localStorageService.update(vitrageId, {
+        segment_defects: segmentDefects,
+        total_defects_count: totalDefectsCount,
+        defective_segments_count: defectiveSegmentsCount
+      })
+      return {
+        data,
+        error: null,
+        usingFallback: true
+      }
+    }
+
+    try {
       const { data, error } = await supabase
         .from('placed_vitrages')
         .update({
@@ -409,18 +451,6 @@ export const placedVitrageStorage = {
       }
     } catch (error) {
       console.warn('⚠️ Using localStorage fallback')
-
-      // Подсчитываем для localStorage тоже
-      let totalDefectsCount = 0
-      let defectiveSegmentsCount = 0
-
-      for (const segmentKey in segmentDefects) {
-        const segment = segmentDefects[segmentKey]
-        if (segment.defects && segment.defects.length > 0) {
-          defectiveSegmentsCount++
-          totalDefectsCount += segment.defects.length
-        }
-      }
 
       const data = await localStorageService.update(vitrageId, {
         segment_defects: segmentDefects,
@@ -446,27 +476,51 @@ export const placedVitrageStorage = {
     error: any,
     usingFallback: boolean
   }> {
+    // Helper to check if string is valid UUID format
+    const isValidUUID = (str: string): boolean => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      return uuidRegex.test(str)
+    }
+
+    const updateData: any = {
+      inspection_status: status,
+      inspection_date: new Date().toISOString(),
+      inspector_name: inspectorName,
+      inspection_notes: notes
+    }
+
+    // Skip Supabase if ID is not valid UUID (old timestamp format)
+    if (!isValidUUID(vitrageId)) {
+      console.warn('⚠️ Vitrage ID is not UUID format, using localStorage:', vitrageId)
+      const data = await localStorageService.update(vitrageId, updateData)
+      return {
+        data,
+        error: null,
+        usingFallback: true
+      }
+    }
+
     try {
-      const updateData: any = {
+      const supabaseUpdateData: any = {
         inspection_status: status,
         updated_at: new Date().toISOString()
       }
 
       if (status === 'checked' || status === 'approved' || status === 'rejected') {
-        updateData.inspection_date = new Date().toISOString()
+        supabaseUpdateData.inspection_date = new Date().toISOString()
       }
 
       if (inspectorName) {
-        updateData.inspector_name = inspectorName
+        supabaseUpdateData.inspector_name = inspectorName
       }
 
       if (notes) {
-        updateData.inspection_notes = notes
+        supabaseUpdateData.inspection_notes = notes
       }
 
       const { data, error } = await supabase
         .from('placed_vitrages')
-        .update(updateData)
+        .update(supabaseUpdateData)
         .eq('id', vitrageId)
         .select()
         .single()
@@ -480,12 +534,7 @@ export const placedVitrageStorage = {
       }
     } catch (error) {
       console.warn('⚠️ Using localStorage fallback')
-      const data = await localStorageService.update(vitrageId, {
-        inspection_status: status,
-        inspection_date: new Date().toISOString(),
-        inspector_name: inspectorName,
-        inspection_notes: notes
-      })
+      const data = await localStorageService.update(vitrageId, updateData)
       return {
         data,
         error: null,
@@ -503,6 +552,23 @@ export const placedVitrageStorage = {
     error: any,
     usingFallback: boolean
   }> {
+    // Helper to check if string is valid UUID format
+    const isValidUUID = (str: string): boolean => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      return uuidRegex.test(str)
+    }
+
+    // Skip Supabase if ID is not valid UUID (old timestamp format)
+    if (!isValidUUID(vitrageId)) {
+      console.warn('⚠️ Vitrage ID is not UUID format, using localStorage:', vitrageId)
+      const data = await localStorageService.update(vitrageId, updateData)
+      return {
+        data,
+        error: null,
+        usingFallback: true
+      }
+    }
+
     try {
       const { data, error } = await supabase
         .from('placed_vitrages')

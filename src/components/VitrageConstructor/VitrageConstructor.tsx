@@ -458,13 +458,8 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
       }
 
       if (savedVitrage) {
-        const storageInfo = source === 'supabase'
-          ? '☁️ Сохранено в облаке (Supabase)'
-          : '📦 Сохранено локально (localStorage)'
-
         const actionText = editingVitrageId ? 'обновлён' : 'сохранён'
-
-        alert(`Витраж "${config.marking}" успешно ${actionText}!\n\n${storageInfo}\n\nПараметры:\n- Объект: ${selectedObject.name}\n- Сетка: ${cols} × ${rows}\n- Всего сегментов: ${cols * rows}\n- Сегментов с данными: ${Object.keys(segmentProperties).length}\n\nВитраж доступен во вкладке "Типовые витражи"`)
+        console.log(`✅ Витраж "${config.marking}" успешно ${actionText} (${source})`)
 
         // После успешного сохранения возвращаемся к форме конфигурации
         handleBack()
@@ -484,7 +479,6 @@ export default function VitrageConstructor({ selectedObject }: VitrageConstructo
       }
     } catch (error) {
       console.error('Ошибка при сохранении витража:', error)
-      alert('Произошла ошибка при сохранении витража. Проверьте консоль для деталей.')
     }
   }
 

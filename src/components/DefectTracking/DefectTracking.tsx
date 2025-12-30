@@ -26,8 +26,7 @@ export default function DefectTracking({ selectedObject }: DefectTrackingProps) 
 
   const handleSaveAndBack = async () => {
     // Данные уже сохранены через saveSegmentData при каждом изменении
-    // Показываем уведомление и возвращаемся к списку
-    alert('Дефекты успешно сохранены!')
+    // Просто возвращаемся к списку
     setSelectedVitrageForView(null)
   }
 

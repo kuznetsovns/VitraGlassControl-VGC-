@@ -18,6 +18,7 @@ interface VitrageGrid {
   totalHeight: number
   profileWidth: number
   createdAt: Date
+  svgDrawing?: string // SVG-отрисовка из Конструктора
 }
 
 export interface Wall {
@@ -174,6 +175,9 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   // Defect tracking hook
   const defectData = useDefectData(selectedObject)
 
+  // All placed vitrages for defect status checking (includes fixed ones)
+  const [allPlacedVitragesForStatus, setAllPlacedVitragesForStatus] = useState<PlacedVitrageData[]>([])
+
   // Filter state
   const [filters, setFilters] = useState({
     name: '',
@@ -201,7 +205,8 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
         totalWidth: v.totalWidth,
         totalHeight: v.totalHeight,
         profileWidth: 12,
-        createdAt: new Date(v.createdAt)
+        createdAt: new Date(v.createdAt),
+        svgDrawing: v.svgDrawing // SVG-отрисовка из Конструктора
       }))
 
       setSavedVitrages(vitrageGrids)
@@ -250,6 +255,27 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     // Load vitrages from VitrageSpecification storage
     loadVitragesFromStorage()
   }, [loadVitragesFromStorage, selectedObject?.id])
+
+  // Load all placed vitrages for defect status checking (includes fixed ones)
+  useEffect(() => {
+    const loadAllPlacedVitrages = async () => {
+      if (!selectedObject?.id) {
+        setAllPlacedVitragesForStatus([])
+        return
+      }
+
+      try {
+        const { data } = await placedVitrageStorage.getByObjectId(selectedObject.id)
+        console.log(`📊 Загружено ${data.length} размещённых витражей для проверки статусов`)
+        setAllPlacedVitragesForStatus(data)
+      } catch (error) {
+        console.error('Ошибка загрузки витражей для статусов:', error)
+        setAllPlacedVitragesForStatus([])
+      }
+    }
+
+    loadAllPlacedVitrages()
+  }, [selectedObject?.id])
 
   // Update ID options from all placed vitrages
   useEffect(() => {
@@ -854,28 +880,20 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
   const placeVitrageAtPosition = async (x: number, y: number) => {
     if (!currentPlan || !selectedVitrageForPlacement || !selectedObject?.id) return
 
-    const newPlacedVitrage: PlacedVitrage = {
-      id: Date.now().toString(),
-      vitrageId: selectedVitrageForPlacement.id,
-      x: x,
-      y: y,
-      rotation: 0,
-      scale: 0.5 // Scale down for floor plan view
-    }
-
-    // Create placed vitrage in Supabase
+    // Create placed vitrage in Supabase first to get UUID
     const placedVitrageData: PlacedVitrageData = {
-      id: newPlacedVitrage.id,
+      // Don't pass id - let Supabase generate UUID
       object_id: selectedObject.id,
       floor_plan_id: currentPlan.id,
-      vitrage_id: newPlacedVitrage.vitrageId,
+      vitrage_id: selectedVitrageForPlacement.id,
       vitrage_name: selectedVitrageForPlacement.name,
       vitrage_data: {
         rows: selectedVitrageForPlacement.rows,
         cols: selectedVitrageForPlacement.cols,
         totalWidth: selectedVitrageForPlacement.totalWidth,
         totalHeight: selectedVitrageForPlacement.totalHeight,
-        segments: selectedVitrageForPlacement.segments
+        segments: selectedVitrageForPlacement.segments,
+        svgDrawing: selectedVitrageForPlacement.svgDrawing // SVG-отрисовка из Конструктора
       },
       position_x: x,
       position_y: y,
@@ -887,12 +905,24 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       segment_defects: {}
     }
 
-    const { data, error } = await placedVitrageStorage.create(placedVitrageData)
+    const { data, error, usingFallback } = await placedVitrageStorage.create(placedVitrageData)
 
     if (error) {
       console.error('Error creating placed vitrage in Supabase:', error)
-    } else {
-      console.log('✅ Placed vitrage saved to Supabase')
+      return
+    }
+
+    // Use UUID from Supabase response (or generated ID from localStorage fallback)
+    const placedVitrageId = data?.id || crypto.randomUUID()
+    console.log('✅ Placed vitrage saved to', usingFallback ? 'localStorage' : 'Supabase', 'with ID:', placedVitrageId)
+
+    const newPlacedVitrage: PlacedVitrage = {
+      id: placedVitrageId,
+      vitrageId: selectedVitrageForPlacement.id,
+      x: x,
+      y: y,
+      rotation: 0,
+      scale: 0.5 // Scale down for floor plan view
     }
 
     // Update local state
@@ -974,6 +1004,70 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
         ctx.restore()
       }
 
+    // Helper function to check if vitrage has defects
+    const checkVitrageHasDefects = (vitrageId: string): boolean => {
+      // First check in segmentDefectsData (updated immediately after saving)
+      for (const [key, data] of defectData.segmentDefectsData.entries()) {
+        if (key.startsWith(`${vitrageId}-`) && data.defects && data.defects.length > 0) {
+          return true
+        }
+      }
+
+      // Check in allPlacedVitragesForStatus (includes all vitrages, not just with active defects)
+      const placedVitrage = allPlacedVitragesForStatus.find(pv =>
+        pv.id === vitrageId || pv.vitrage_id === vitrageId
+      )
+
+      if (placedVitrage?.segment_defects) {
+        // Check if any segment has defects
+        for (const segmentKey in placedVitrage.segment_defects) {
+          const segment = placedVitrage.segment_defects[segmentKey]
+          if (segment.defects && segment.defects.length > 0) {
+            return true
+          }
+        }
+      }
+
+      return false
+    }
+
+    // Helper function to check if all defects are fixed (green status)
+    const checkVitrageAllFixed = (vitrageId: string): boolean => {
+      // Check in allPlacedVitragesForStatus (includes all vitrages, including fixed ones)
+      const placedVitrage = allPlacedVitragesForStatus.find(pv =>
+        pv.id === vitrageId || pv.vitrage_id === vitrageId
+      )
+
+      if (!placedVitrage?.segment_defects) {
+        return false // No defect data - not fixed
+      }
+
+      const segmentDefects = placedVitrage.segment_defects
+      const segmentKeys = Object.keys(segmentDefects)
+
+      if (segmentKeys.length === 0) {
+        return false // No segments checked
+      }
+
+      // Check if any segment has 'fixed' status and no segments have defects
+      let hasFixedSegments = false
+      let hasDefects = false
+
+      for (const segmentKey of segmentKeys) {
+        const segment = segmentDefects[segmentKey]
+        if (segment.defects && segment.defects.length > 0) {
+          hasDefects = true
+          break
+        }
+        if (segment.status === 'fixed') {
+          hasFixedSegments = true
+        }
+      }
+
+      // Return true only if there are fixed segments and no defects
+      return hasFixedSegments && !hasDefects
+    }
+
     // Draw placed vitrages
     currentPlan?.placedVitrages.forEach(placedVitrage => {
       const vitrage = savedVitrages.find(v => v.id === placedVitrage.vitrageId)
@@ -987,13 +1081,37 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       const displayWidth = vitrage.totalWidth * 0.1
       const displayHeight = vitrage.totalHeight * 0.1
 
-      // Draw vitrage background
-      ctx.fillStyle = '#fff'
+      // Check if vitrage has defects or all fixed
+      const hasDefects = checkVitrageHasDefects(placedVitrage.id)
+      const allFixed = checkVitrageAllFixed(placedVitrage.id)
+
+      // Draw vitrage background - red if has defects, green if all fixed
+      let bgColor = '#fff'
+      if (hasDefects) {
+        bgColor = '#ffcdd2' // Light red for defects
+      } else if (allFixed) {
+        bgColor = '#c8e6c9' // Light green for all fixed
+      }
+      ctx.fillStyle = bgColor
       ctx.fillRect(0, 0, displayWidth, displayHeight)
 
-      // Draw vitrage border
-      ctx.strokeStyle = selectedItem === placedVitrage.id ? '#4CAF50' : '#333'
-      ctx.lineWidth = selectedItem === placedVitrage.id ? 3 : 2
+      // Draw vitrage border - red if has defects, green if selected or all fixed
+      let borderColor = '#333'
+      let borderWidth = 2
+
+      if (selectedItem === placedVitrage.id) {
+        borderColor = '#4CAF50'
+        borderWidth = 3
+      } else if (hasDefects) {
+        borderColor = '#c62828'
+        borderWidth = 3
+      } else if (allFixed) {
+        borderColor = '#43a047' // Green for all fixed
+        borderWidth = 3
+      }
+
+      ctx.strokeStyle = borderColor
+      ctx.lineWidth = borderWidth
       ctx.strokeRect(0, 0, displayWidth, displayHeight)
 
       // Draw grid lines for all vitrages
@@ -1111,7 +1229,7 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
     // Restore zoom and pan transformations
     ctx.restore()
     }
-  }, [currentPlan, savedVitrages, selectedItem, canvasDimensions, backgroundOpacity, selectedVitrageForPlacement, mousePosition, zoomLevel, panOffset, backgroundImageCache])
+  }, [currentPlan, savedVitrages, selectedItem, canvasDimensions, backgroundOpacity, selectedVitrageForPlacement, mousePosition, zoomLevel, panOffset, backgroundImageCache, allPlacedVitragesForStatus, defectData.segmentDefectsData])
 
   // Redraw on state changes
   useEffect(() => {
@@ -1361,12 +1479,13 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
       return
     }
 
-    // Generate SVG if not present (for old vitrages)
-    const svgDrawing = generateSimpleSVG(vitrage, placedVitrage.segmentIDs || {})
+    // Use original SVG from Constructor if available, fall back to generated for old vitrages
+    const svgDrawing = vitrage.svgDrawing || generateSimpleSVG(vitrage, placedVitrage.segmentIDs || {})
 
     // Convert VitrageGrid to VitrageItem format with segment IDs
+    // IMPORTANT: Use placedVitrage.id (not vitrage.id) for defect tracking
     const vitrageItem: VitrageItem = {
-      id: vitrage.id,
+      id: placedVitrage.id, // ID размещённого витража для сохранения дефектов
       name: vitrage.name,
       objectId: selectedObject?.id || '',
       objectName: selectedObject?.name || '',
@@ -1479,7 +1598,8 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
           cols: vitrage.cols,
           totalWidth: vitrage.totalWidth,
           totalHeight: vitrage.totalHeight,
-          segments: vitrage.segments
+          segments: vitrage.segments,
+          svgDrawing: vitrage.svgDrawing // SVG-отрисовка из Конструктора
         },
         position_x: placedVitrage.x,
         position_y: placedVitrage.y,
@@ -1556,7 +1676,6 @@ export default function FloorPlanEditor({ width, height, selectedObject }: Floor
           setTimeout(() => draw(), 0)
         }}
         onSaveAndBack={() => {
-          alert('Дефекты успешно сохранены!')
           setSelectedVitrageForDefect(null)
           // Force canvas redraw after closing defect tracking
           setTimeout(() => draw(), 0)

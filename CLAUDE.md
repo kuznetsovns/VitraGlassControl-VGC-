@@ -31,18 +31,17 @@ npm run preview  # Preview production build
 **URL Parameters:**
 - `:id` - Object UUID
 - `:department` - `УОК`, `Снабжение`, or `Гарантия`
-- `:section` - Menu section (e.g., `vitrage-visualizer`, `specification-new`, `floor-plans`)
+- `:section` - Menu section (e.g., `vitrage-constructor`, `specification-new`, `floor-plans`)
 
 ### Department Access
-| Section | УОК | Снабжение | Гарантия |
-|---------|-----|-----------|----------|
-| vitrage-visualizer | ✓ | | |
-| vitrage-constructor | ✓ | | |
-| specification-new | ✓ | | |
-| defect-tracking | ✓ | | |
-| floor-plans | ✓ | | |
-| facade-plans | ✓ | | |
-| order-form | | ✓ | ✓ |
+| Section | Label | УОК | Снабжение | Гарантия |
+|---------|-------|-----|-----------|----------|
+| vitrage-constructor | Конструктор Витражей | ✓ | | |
+| specification-new | Типовые витражи | ✓ | | |
+| defect-tracking | Дефектовка | ✓ | | |
+| floor-plans | План этажей | ✓ | | |
+| facade-plans | Фасады | ✓ | | |
+| order-form | Оформление заказа | | ✓ | ✓ |
 
 Additional sections exist (`support`, `settings`, `admin`) but are currently placeholder UI.
 
@@ -63,10 +62,11 @@ Additional sections exist (`support`, `settings`, `admin`) but are currently pla
 ### Legacy vs Current Components
 | Legacy (deprecated) | Current |
 |---------------------|---------|
-| `GraphicsEditor/` | `VitrageVisualizer/` |
+| `GraphicsEditor/` | `VitrageConstructor/` |
+| `VitrageVisualizer/` | `VitrageConstructor/` |
 | `VitrageSpecification/` | `VitrageSpecificationNew/` |
 
-**Note**: `GraphicsEditor` is still used for the `vitrage-drawing` section (legacy route).
+**Note**: `VitrageConstructor` is now the primary component for creating and editing vitrages. `VitrageVisualizer` exists but is no longer accessible via menu.
 
 ### Fill Types (used across components)
 ```typescript
@@ -139,26 +139,59 @@ interface VitrageConfig {
 }
 ```
 
-### PlacedVitrage (Floor/Facade Plans)
+### PlacedVitrage (Floor/Facade Plans with Defect Inspection)
 ```typescript
-interface PlacedVitrage {
+interface PlacedVitrageData {
   id: string
-  vitrageId: string           // reference to saved vitrage
-  x: number, y: number        // position on plan
-  rotation: number            // 0, 90, 180, 270
-  scale: number               // 0.1 to 3.0
+  object_id: string
+  floor_plan_id?: string
+  vitrage_id: string
+  vitrage_name: string
+  vitrage_data?: any           // Full vitrage config
+  position_x?: number, position_y?: number
+  rotation?: number            // 0, 90, 180, 270
+  scale?: number               // 0.1 to 3.0
+  // Hierarchical ID components
+  id_object?: string
+  id_corpus?: string
+  id_section?: string
+  id_floor?: string
+  id_apartment?: string
+  id_vitrage_number?: string
+  id_vitrage_name?: string
+  id_vitrage_section?: string
+  full_id?: string             // Auto-generated in DB
+  // Defect inspection
+  segment_defects?: Record<string, SegmentDefect>
+  inspection_status?: 'not_checked' | 'in_progress' | 'checked' | 'approved' | 'rejected'
+  inspection_date?: string
+  inspector_name?: string
+  inspection_notes?: string
+  total_defects_count?: number
+  defective_segments_count?: number
+}
+
+interface SegmentDefect {
+  defects: string[]            // defect type names
+  status: 'ok' | 'defective' | 'not_checked'
+  notes?: string
+  checked_at?: string
 }
 ```
 
 ## Component View Modes
 
-### VitrageConstructor
+### VitrageConstructor (Primary)
 Uses a two-phase workflow:
-- `'config'` - Initial configuration form (marking, segments count)
-- `'editor'` - Grid editor with segment selection and properties
+- `'config'` - Initial configuration form (marking, site manager, segments count)
+- `'editor'` - Grid editor with segment selection and properties, supports:
+  - Multi-segment selection
+  - Segment merging/splitting
+  - Row/column insertion and deletion
+  - Fill type assignment with formulas
 
-### VitrageVisualizer
-Similar two-phase approach with configuration preview and detailed editing.
+### VitrageVisualizer (Legacy)
+Similar two-phase approach with configuration preview and detailed editing. No longer accessible via menu.
 
 ## Canvas Editor Interactions
 
@@ -180,7 +213,7 @@ Similar two-phase approach with configuration preview and detailed editing.
 
 ### Development
 - **Prefer editing existing files** over creating new ones
-- **Use current components**: VitrageVisualizer, VitrageSpecificationNew (not legacy)
+- **Use current components**: VitrageConstructor, VitrageSpecificationNew (not legacy GraphicsEditor, VitrageVisualizer, VitrageSpecification)
 - **Russian UI**: Maintain Russian for all user-facing text
 - **Canvas modifications**: Study existing rendering code before changes
 - **Data model changes**: Test with fresh localStorage or provide migration
@@ -211,6 +244,30 @@ Similar two-phase approach with configuration preview and detailed editing.
 - Storage: Use appropriate storage service (`objectStorage`, `vitrageStorage`, `defectStorage`, `floorPlanStorage`, `placedVitrageStorage`)
 - Storage fallback: Console shows "📦 Using localStorage fallback" when Supabase unavailable
 
-## Repository Note
+## Defect Data Models
 
-Contains embedded `VitraGlassControl-VGC-` directory (nested copy). Always modify files at root level.
+### Two Defect Storage Approaches
+The system has two complementary defect data models:
+
+1. **PlacedVitrage.segment_defects** (`placedVitrageStorage.ts`) - defects stored directly on placed vitrages, used for floor plan defect tracking
+2. **SegmentDefectData** (`defectStorage.ts`) - standalone defect records linked to vitrage IDs, used for historical inspection tracking
+
+### SegmentDefectData (defectStorage)
+```typescript
+interface SegmentDefectData {
+  id?: string
+  vitrageId: string           // reference to saved vitrage
+  segmentIndex: number        // segment index within vitrage grid
+  inspectionDate: string      // ISO date
+  inspector: string
+  siteManager: string
+  defects: string[]           // defect type names
+  defectItems?: DefectItem[]  // detailed defect info (optional)
+  notes?: string
+}
+```
+
+Storage key pattern: `{vitrageId}-{segmentIndex}` for unique segment identification.
+
+### Default Defect Types
+`Царапины`, `Сколы`, `Трещины`, `Загрязнения`, `Деформация`, `Разгерметизация`, `Запотевание`, `Некачественный монтаж`
