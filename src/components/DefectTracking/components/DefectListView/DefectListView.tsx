@@ -9,6 +9,7 @@ interface DefectListViewProps {
   storageSource: 'supabase' | 'localStorage'
   segmentDefectsData: Map<string, SegmentDefectData>
   onVitrageClick: (vitrage: VitrageItem) => void
+  onVitrageDelete?: (vitrage: VitrageItem) => void
   showExportMenu: boolean
   setShowExportMenu: (show: boolean) => void
   onExportAll: () => void
@@ -24,6 +25,7 @@ export function DefectListView({
   storageSource,
   segmentDefectsData,
   onVitrageClick,
+  onVitrageDelete,
   showExportMenu,
   setShowExportMenu,
   onExportAll,
@@ -113,6 +115,7 @@ export function DefectListView({
                   objects={objects}
                   segmentDefectsData={segmentDefectsData}
                   onClick={onVitrageClick}
+                  onDelete={onVitrageDelete}
                 />
               ))}
             </div>
